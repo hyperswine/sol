@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sol Programming Language Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="layout">
+        <nav class="sidebar">
+            <h3>Sol Documentation</h3>
+            <ul>
+                <li><a href="#COMPLETED">Status</a></li>
+                <li><a href="#TODO">TODO</a></li>
+                <li><a href="#BUILT-IN FUNCTIONS">Functions</a>
+                    <ul>
+                        <li><a href="#Filesystem Operations">Filesystem</a></li>
+                        <li><a href="#Git Operations">Git</a></li>
+                        <li><a href="#Arithmetic Operations">Arithmetic</a></li>
+                        <li><a href="#Comparison and Logic">Logic</a></li>
+                        <li><a href="#Higher-Order Functions">Higher-Order</a></li>
+                        <li><a href="#System Information">System</a></li>
+                        <li><a href="#Web and Network Operations">Network</a></li>
+                        <li><a href="#Compression and Archives">Archives</a></li>
+                        <li><a href="#Data Processing">Data</a></li>
+                        <li><a href="#Type Conversion">Types</a></li>
+                        <li><a href="#Utilities">Utilities</a></li>
+                    </ul>
+                </li>
+                <li><a href="#USAGE">Usage</a></li>
+                <li><a href="#EXAMPLES">Examples</a></li>
+                <li><a href="#IMPLEMENTATION">Implementation</a></li>
+                <li><a href="#PROJECT STRUCTURE">Structure</a></li>
+                <li><a href="#LANGUAGE PHILOSOPHY">Philosophy</a></li>
+            </ul>
+        </nav>
+        <main class="content">
+            <h1>Sol Programming Language</h1>
+            <p>Sol is a modern, minimal, batteries-included scripting language designed for readability, quick startup, and powerful standard tooling. Built on Python's extensive ecosystem, Sol provides a highly expressive scripting experience with clean syntax.</p>
+
+<ul>
+<li><strong>Clean Syntax</strong>: Statements end with periods (<code>.</code>) like natural language</li>
+<li><strong>Prefix Function Calls</strong>: <code>result = func arg1 arg2</code></li>
+<li><strong>Built-in Standard Library</strong>: File operations, OS commands, all using Python's libraries</li>
+<li><strong>Fast Startup</strong>: Minimal runtime overhead</li>
+<li><strong>No Dependencies</strong>: Everything you need is built-in</li>
+</ul>
+
+<pre><code class="sol">echo "Hello World".</code></pre>
+
+<pre><code class="sol">current_dir = pwd.
+<p>echo current_dir.</code></pre>
+
+<pre><code class="sol">mkdir "my_directory".
+<p>write "test.txt" "Hello Sol!".</p>
+<p>content = read "test.txt".</code></pre>
+
+<h2 id="COMPLETED">COMPLETED</h2>
+
+<p>✅ Added git operations: <code>gitsync</code>, <code>gitpush</code>, <code>gitupdate</code>, and individual git commands (<code>git_status</code>, <code>git_add</code>, <code>git_commit</code>, <code>git_push</code>, <code>git_pull</code>, <code>git_fetch</code>, <code>git_log</code>, <code>git_branch</code>)</p>
+<p>✅ Added filesystem operations: <code>cp</code>, <code>mv</code>, and other useful filesystem functions (<code>touch</code>, <code>chmod</code>, <code>find</code>, <code>du</code>)</p>
+<p>✅ Enhanced <code>mkdir</code> to use <code>-p</code> behavior by default (already implemented)</p>
+
+<h2 id="TODO">TODO</h2>
+
+<p>Add more git operations like branch switching, merging, and repository initialization. Consider adding file watching capabilities and text processing utilities.</p>
+
+<h2 id="BUILT-IN FUNCTIONS">BUILT-IN FUNCTIONS</h2>
+
+<p>Sol comes with a comprehensive standard library providing filesystem operations, networking, data processing, system information, and more. All functions are implemented using Python's standard library for maximum compatibility and reliability.</p>
+
+<h3 id="<strong>Filesystem Operations</strong>"><strong>Filesystem Operations</strong></h3>
+
+<ul>
+<li><strong><code>ls [path]</code></strong> - List directory contents</li>
+<li>Without arguments: Lists current directory contents</li>
+<li>With path: Lists specified directory contents</li>
+<li>Returns: List of filenames and directories</li>
+<li>Example: <code>files = ls "src".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>pwd</code></strong> - Get current working directory</li>
+<li>Returns: Absolute path of current directory as string</li>
+<li>Example: <code>current = pwd.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>mkdir path</code></strong> - Create directory</li>
+<li>Creates directory and any necessary parent directories</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>mkdir "project/src".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>rm path</code></strong> - Remove file or directory</li>
+<li>Removes files or directories recursively</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>rm "temp_file.txt".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>read path</code></strong> - Read file contents</li>
+<li>Reads entire file content as string</li>
+<li>Returns: File contents or error message</li>
+<li>Example: <code>content = read "config.txt".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>write path content</code></strong> - Write content to file</li>
+<li>Writes string content to file, creating file if needed</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>write "output.txt" "Hello World".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>cp source destination</code></strong> - Copy file or directory</li>
+<li>Copies files or directories (including subdirectories)</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>cp "file.txt" "backup.txt".</code></li>
+<li>Example: <code>cp "mydir" "backup_dir".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>mv source destination</code></strong> - Move/rename file or directory</li>
+<li>Moves or renames files and directories</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>mv "old_name.txt" "new_name.txt".</code></li>
+<li>Example: <code>mv "folder" "new_location/folder".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>touch path</code></strong> - Create empty file or update timestamp</li>
+<li>Creates empty file if it doesn't exist, updates timestamp if it does</li>
+<li>Creates parent directories as needed</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>touch "new_file.txt".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>chmod path mode</code></strong> - Change file permissions</li>
+<li>Changes file permissions using Unix-style octal notation</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>chmod "script.sh" "755".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>find [directory] [pattern]</code></strong> - Find files matching pattern</li>
+<li>Searches recursively for files matching glob pattern</li>
+<li>Default directory: current directory, default pattern: "*"</li>
+<li>Returns: List of matching files</li>
+<li>Example: <code>files = find "src" "*.py".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>du [path]</code></strong> - Get directory size and file count</li>
+<li>Calculates total size, file count, and directory count</li>
+<li>Default path: current directory</li>
+<li>Returns: Dictionary with size, files, and directories count</li>
+<li>Example: <code>size_info = du "project".</code></li>
+</ul>
+
+<h3 id="<strong>Git Operations</strong>"><strong>Git Operations</strong></h3>
+
+<ul>
+<li><strong><code>git_status</code></strong> - Get git repository status</li>
+<li>Shows modified, added, deleted files</li>
+<li>Returns: Git status output or "Working directory clean"</li>
+<li>Example: <code>status = git_status.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>git_add [path]</code></strong> - Add files to staging area</li>
+<li>Adds files to git staging area (default: all files)</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>git_add "file.txt".</code></li>
+<li>Example: <code>git_add ".".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>git_commit [message]</code></strong> - Commit staged changes</li>
+<li>Commits staged changes with message (default: "Quick Update")</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>git_commit "Fix bug in parser".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>git_push</code></strong> - Push commits to remote</li>
+<li>Pushes committed changes to remote repository</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>git_push.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>git_pull</code></strong> - Pull changes from remote</li>
+<li>Pulls latest changes from remote repository</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>git_pull.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>git_fetch</code></strong> - Fetch changes from remote</li>
+<li>Fetches changes without merging</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>git_fetch.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>gitupdate</code></strong> - Quick commit workflow</li>
+<li>Performs: git add . → git commit -m "Quick Update"</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>gitupdate.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>gitpush</code></strong> - Quick push workflow</li>
+<li>Performs: git add . → git commit -m "Quick Update" → git push</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>gitpush.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>gitsync</code></strong> - Full synchronization workflow</li>
+<li>Performs: git add . → git commit → git push → git fetch → git pull</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>gitsync.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>git_log [count]</code></strong> - Show commit history</li>
+<li>Shows last N commits in one-line format (default: 10)</li>
+<li>Returns: Commit history or "No commits found"</li>
+<li>Example: <code>recent_commits = git_log 5.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>git_branch</code></strong> - List git branches</li>
+<li>Shows all local branches with current branch marked</li>
+<li>Returns: Branch list</li>
+<li>Example: <code>branches = git_branch.</code></li>
+</ul>
+
+<h3 id="<strong>Arithmetic Operations</strong>"><strong>Arithmetic Operations</strong></h3>
+
+<ul>
+<li><strong><code>+ value1 value2 [value3...]</code></strong> - Addition and concatenation</li>
+<li>Numbers: Performs arithmetic addition</li>
+<li>Strings: Concatenates strings together</li>
+<li>Supports multiple arguments for chaining</li>
+<li>Can create partial functions: <code>add_five = + 5.</code></li>
+<li>Example: <code>result = + 10 20 30.</code> (returns 60)</li>
+</ul>
+
+<ul>
+<li><strong><code>- number1 number2</code></strong> - Subtraction</li>
+<li>Subtracts second number from first</li>
+<li>Can create partial functions: <code>subtract_ten = - 10.</code></li>
+<li>Example: <code>result = - 100 25.</code> (returns 75)</li>
+</ul>
+
+<ul>
+<li>**<code>* number1 number2</code>** - Multiplication</li>
+<li>Multiplies two numbers together</li>
+<li>Can create partial functions: <code>double = * 2.</code></li>
+<li>Example: <code>result = * 6 7.</code> (returns 42)</li>
+</ul>
+
+<ul>
+<li><strong><code>/ number1 number2</code></strong> - Division</li>
+<li>Divides first number by second</li>
+<li>Handles division by zero with error message</li>
+<li>Can create partial functions: <code>half = / 2.</code></li>
+<li>Example: <code>result = / 100 4.</code> (returns 25)</li>
+</ul>
+
+<h3 id="<strong>Comparison and Logic</strong>"><strong>Comparison and Logic</strong></h3>
+
+<ul>
+<li><strong><code>> threshold</code></strong> - Greater than predicate</li>
+<li>Creates a function that tests if value > threshold</li>
+<li>Used with filter and other higher-order functions</li>
+<li>Example: <code>big_nums = filter (> 10) numbers.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>< threshold</code></strong> - Less than predicate</li>
+<li>Creates a function that tests if value < threshold</li>
+<li>Used with filter and other higher-order functions</li>
+<li>Example: <code>small_nums = filter (< 5) numbers.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>== value</code></strong> - Equality predicate</li>
+<li>Creates a function that tests if value equals given value</li>
+<li>Works with any data type</li>
+<li>Example: <code>matches = filter (== "target") strings.</code></li>
+</ul>
+
+<h3 id="<strong>Higher-Order Functions</strong>"><strong>Higher-Order Functions</strong></h3>
+
+<ul>
+<li><strong><code>map function array</code></strong> - Apply function to each element</li>
+<li>Applies function to every element in array</li>
+<li>Returns new array with transformed elements</li>
+<li>Works with partial functions and predicates</li>
+<li>Example: <code>doubled = map (* 2) [1, 2, 3].</code> (returns [2, 4, 6])</li>
+</ul>
+
+<ul>
+<li><strong><code>filter predicate array</code></strong> - Filter array elements</li>
+<li>Keeps only elements where predicate returns true</li>
+<li>Returns new array with filtered elements</li>
+<li>Example: <code>evens = filter (== 0) remainders.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>fold function array [initial]</code></strong> - Reduce array with function</li>
+<li>Reduces array to single value using function</li>
+<li>Optional initial value for accumulator</li>
+<li>Example: <code>sum = fold + [1, 2, 3, 4].</code> (returns 10)</li>
+</ul>
+
+<h3 id="<strong>System Information</strong>"><strong>System Information</strong></h3>
+
+<ul>
+<li><strong><code>whoami</code></strong> - Get current username</li>
+<li>Returns: Current system username as string</li>
+<li>Example: <code>user = whoami.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>hostname</code></strong> - Get system hostname</li>
+<li>Returns: Computer's hostname as string</li>
+<li>Example: <code>host = hostname.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>getenv var_name</code></strong> - Get environment variable</li>
+<li>Returns: Environment variable value or empty string</li>
+<li>Example: <code>home = getenv "HOME".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>setenv var_name value</code></strong> - Set environment variable</li>
+<li>Sets environment variable for current process</li>
+<li>Returns: Confirmation message</li>
+<li>Example: <code>setenv "MY_VAR" "test_value".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>listenv</code></strong> - List all environment variables</li>
+<li>Returns: Dictionary of all environment variables</li>
+<li>Example: <code>env_vars = listenv.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>platform</code></strong> - Get platform information</li>
+<li>Returns: Dictionary with system, machine, processor, architecture, Python version</li>
+<li>Example: <code>sys_info = platform.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>cpu_count</code></strong> - Get number of CPU cores</li>
+<li>Returns: Number of logical CPU cores</li>
+<li>Example: <code>cores = cpu_count.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>cpu_percent</code></strong> - Get current CPU usage percentage</li>
+<li>Returns: Current CPU usage as percentage (0-100)</li>
+<li>Takes 1 second to measure</li>
+<li>Example: <code>usage = cpu_percent.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>memory</code></strong> - Get memory usage information</li>
+<li>Returns: Dictionary with total, available, percent, used, free memory</li>
+<li>All values in bytes except percent</li>
+<li>Example: <code>mem_info = memory.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>disk_usage [path]</code></strong> - Get disk usage statistics</li>
+<li>Path defaults to current directory if not specified</li>
+<li>Returns: Dictionary with total, used, free space and percent</li>
+<li>Example: <code>disk_info = disk_usage "/".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>uptime</code></strong> - Get system uptime in seconds</li>
+<li>Returns: Number of seconds since system boot</li>
+<li>Example: <code>boot_time = uptime.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>processes</code></strong> - Get list of running processes</li>
+<li>Returns: List of top 20 processes with PID, name, CPU percent</li>
+<li>Example: <code>proc_list = processes.</code></li>
+</ul>
+
+<h3 id="<strong>Web and Network Operations</strong>"><strong>Web and Network Operations</strong></h3>
+
+<ul>
+<li><strong><code>wget url</code></strong> - Download content from URL</li>
+<li>Downloads content from web URL</li>
+<li>Returns: Downloaded content as string or error message</li>
+<li>Example: <code>content = wget "https://api.github.com/users/octocat".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>get url</code></strong> - Make HTTP GET request</li>
+<li>Makes HTTP GET request to specified URL</li>
+<li>Returns: Response content or error message</li>
+<li>Example: <code>response = get "https://httpbin.org/get".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>post url [data]</code></strong> - Make HTTP POST request</li>
+<li>Makes HTTP POST request with optional data payload</li>
+<li>Data can be dictionary or string</li>
+<li>Returns: Response content or error message</li>
+<li>Example: <code>response = post "https://httpbin.org/post" {"key": "value"}.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>ping host [count]</code></strong> - Ping a host</li>
+<li>Pings specified host (default 4 packets)</li>
+<li>Returns: Ping results as string</li>
+<li>Example: <code>result = ping "google.com" 3.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>dns_lookup hostname</code></strong> - Perform DNS lookup</li>
+<li>Resolves hostname to IP address</li>
+<li>Returns: Dictionary with hostname and IP</li>
+<li>Example: <code>ip_info = dns_lookup "github.com".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>whois domain</code></strong> - Get WHOIS information</li>
+<li>Retrieves WHOIS information for domain</li>
+<li>Requires system whois command</li>
+<li>Returns: WHOIS output as string</li>
+<li>Example: <code>info = whois "example.com".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>nmap target [ports]</code></strong> - Basic port scan</li>
+<li>Performs port scan using nmap (must be installed)</li>
+<li>Default ports: 1-1000</li>
+<li>Returns: Nmap output as string</li>
+<li>Example: <code>scan = nmap "192.168.1.1" "1-100".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>port_scan host port</code></strong> - Check if specific port is open</li>
+<li>Tests connectivity to specific host and port</li>
+<li>Returns: Status message indicating open/closed</li>
+<li>Example: <code>status = port_scan "github.com" 443.</code></li>
+</ul>
+
+<h3 id="<strong>Compression and Archives</strong>"><strong>Compression and Archives</strong></h3>
+
+<ul>
+<li><strong><code>zip_create archive.zip file1 file2 ...</code></strong> - Create ZIP archive</li>
+<li>Creates ZIP archive containing specified files</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>zip_create "backup.zip" "file1.txt" "file2.txt".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>zip_extract archive.zip [destination]</code></strong> - Extract ZIP archive</li>
+<li>Extracts ZIP archive to destination (default: current directory)</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>zip_extract "backup.zip" "restore_folder".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>tar_create archive.tar file1 file2 ...</code></strong> - Create TAR archive</li>
+<li>Creates TAR archive (supports .tar.gz for compression)</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>tar_create "backup.tar.gz" "src" "docs".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>tar_extract archive.tar [destination]</code></strong> - Extract TAR archive</li>
+<li>Extracts TAR archive to destination</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>tar_extract "backup.tar.gz" "restore".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>gzip_compress file [output]</code></strong> - Compress file with GZIP</li>
+<li>Compresses file using GZIP algorithm</li>
+<li>Output defaults to file.gz if not specified</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>gzip_compress "large_file.txt" "compressed.gz".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>gzip_decompress file.gz [output]</code></strong> - Decompress GZIP file</li>
+<li>Decompresses GZIP file</li>
+<li>Output defaults to original name without .gz</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>gzip_decompress "compressed.gz" "restored.txt".</code></li>
+</ul>
+
+<h3 id="<strong>Data Processing</strong>"><strong>Data Processing</strong></h3>
+
+<ul>
+<li><strong><code>jsonread filepath</code></strong> - Read and parse JSON file</li>
+<li>Reads JSON file and parses into Sol data structures</li>
+<li>Returns: Parsed JSON data or error message</li>
+<li>Example: <code>config = jsonread "settings.json".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>jsonwrite data filepath</code></strong> - Write data to JSON file</li>
+<li>Converts Sol data to JSON and writes to file</li>
+<li>Pretty-prints with 2-space indentation</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>jsonwrite config "settings.json".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>jsonparse json_string</code></strong> - Parse JSON string</li>
+<li>Parses JSON string into Sol data structures</li>
+<li>Returns: Parsed data or error message</li>
+<li>Example: <code>data = jsonparse "{"name": "Sol", "version": "0.1"}".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>jsonstringify data</code></strong> - Convert data to JSON string</li>
+<li>Converts Sol data structures to JSON string</li>
+<li>Pretty-prints with 2-space indentation</li>
+<li>Returns: JSON string representation</li>
+<li>Example: <code>json_str = jsonstringify {"name": "Sol"}.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>csvread filepath [delimiter] [has_header]</code></strong> - Read CSV file</li>
+<li>Reads CSV file into list of lists (rows and columns)</li>
+<li>Default delimiter: comma, default has_header: true</li>
+<li>Returns: Array of arrays or error message</li>
+<li>Example: <code>data = csvread "data.csv" "," true.</code></li>
+</ul>
+
+<ul>
+<li><strong><code>csvwrite data filepath [delimiter]</code></strong> - Write data to CSV file</li>
+<li>Writes array of arrays to CSV file</li>
+<li>Default delimiter: comma</li>
+<li>Returns: Success message or error description</li>
+<li>Example: <code>csvwrite rows "output.csv" ",".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>csvparse csv_string [delimiter]</code></strong> - Parse CSV string</li>
+<li>Parses CSV string into array of arrays</li>
+<li>Default delimiter: comma</li>
+<li>Returns: Parsed data or error message</li>
+<li>Example: <code>data = csvparse "name,age\nJohn,25\nJane,30".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>set data path value</code></strong> - Set value in nested structure</li>
+<li>Sets value in nested dictionary/array using path</li>
+<li>Path uses "|" separator (e.g., "key1|index|key2")</li>
+<li>Works with both dictionaries and arrays (1-indexed)</li>
+<li>Returns: Updated data structure or error message</li>
+<li>Example: <code>updated = set data "user|name" "NewName".</code></li>
+</ul>
+
+<h3 id="<strong>Type Conversion</strong>"><strong>Type Conversion</strong></h3>
+
+<ul>
+<li><strong><code>to_number value</code></strong> - Convert value to number</li>
+<li>Converts strings or other values to int or float</li>
+<li>Returns: Number or error message if conversion fails</li>
+<li>Example: <code>num = to_number "42.5".</code> (returns 42.5)</li>
+</ul>
+
+<ul>
+<li><strong><code>to_string value</code></strong> - Convert value to string</li>
+<li>Converts any value to its string representation</li>
+<li>Handles booleans, None, and complex data structures</li>
+<li>Returns: String representation of value</li>
+<li>Example: <code>str_val = to_string 123.</code> (returns "123")</li>
+</ul>
+
+<h3 id="<strong>Utilities</strong>"><strong>Utilities</strong></h3>
+
+<ul>
+<li><strong><code>echo text</code></strong> - Print text to stdout</li>
+<li>Outputs any value as text</li>
+<li>Handles all data types with proper formatting</li>
+<li>Returns: String representation of input</li>
+<li>Example: <code>echo "Hello World".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>md5 text</code></strong> - Calculate MD5 hash</li>
+<li>Calculates MD5 hash of text as hexadecimal string</li>
+<li>Returns: 32-character hex string</li>
+<li>Example: <code>hash = md5 "password123".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>sha256 text</code></strong> - Calculate SHA256 hash</li>
+<li>Calculates SHA256 hash of text as hexadecimal string</li>
+<li>Returns: 64-character hex string</li>
+<li>Example: <code>secure_hash = sha256 "sensitive_data".</code></li>
+</ul>
+
+<h3 id="<strong>Data Structures</strong>"><strong>Data Structures</strong></h3>
+
+<p>Sol supports rich data structures with literal syntax:</p>
+
+<ul>
+<li><strong>Arrays</strong>: <code>[1, 2, 3]</code> - Ordered collections with 1-based indexing</li>
+<li><strong>Dictionaries</strong>: <code>{"key": "value", "num": 42}</code> - Key-value mappings</li>
+<li><strong>Nested structures</strong>: <code>[{"name": "Sol"}, [1, 2]]</code> - Full nesting support</li>
+<li><strong>Access syntax</strong>: <code>data|key|1|subkey</code> - Chain access with | separator</li>
+<li><strong>Variable interpolation</strong>: <code>data|(variable)</code> - Use variable values as keys</li>
+</ul>
+
+<h2 id="USAGE">USAGE</h2>
+
+<h3 id="Script Execution">Script Execution</h3>
+
+<pre><code class="bash">python main.py script.sol</code></pre>
+
+<h3 id="Interactive Mode">Interactive Mode</h3>
+
+<pre><code class="bash">python main.py</code></pre>
+
+<h3 id="Debug Mode">Debug Mode</h3>
+
+<pre><code class="bash">python main.py --debug script.sol  # For script files
+<p>python main.py --debug             # For interactive mode</code></pre>
+
+<h2 id="EXAMPLES">EXAMPLES</h2>
+
+<h3 id="<strong>Basic Operations</strong>"><strong>Basic Operations</strong></h3>
+
+<pre><code class="sol"><h1>File and directory operations</h1>
+<p>echo "Setting up project structure".</p>
+<p>mkdir "my_project".</p>
+<p>mkdir "my_project/src".</p>
+<p>mkdir "my_project/docs".</p>
+
+<h1>Write configuration files</h1>
+<p>config = {"name": "MyProject", "version": "1.0", "debug": true}.</p>
+<p>jsonwrite config "my_project/config.json".</p>
+
+<h1>Read and display</h1>
+<p>project_config = jsonread "my_project/config.json".</p>
+<p>echo "Project configuration:".</p>
+<p>echo project_config.</code></pre>
+
+<h3 id="<strong>System Information and Monitoring</strong>"><strong>System Information and Monitoring</strong></h3>
+
+<pre><code class="sol"><h1>Get comprehensive system information</h1>
+<p>user = whoami.</p>
+<p>host = hostname.</p>
+<p>cores = cpu_count.</p>
+<p>cpu_usage = cpu_percent.</p>
+<p>mem_info = memory.</p>
+<p>disk_info = disk_usage.</p>
+
+<p>echo "=== System Information ===".</p>
+<p>echo + "User: " user.</p>
+<p>echo + "Host: " host.</p>
+<p>echo + "CPU Cores: " (to_string cores).</p>
+<p>echo + "CPU Usage: " (to_string cpu_usage) "%".</p>
+<p>echo + "Memory Usage: " (to_string mem_info|percent) "%".</code></pre>
+
+<h3 id="<strong>Data Processing and Analysis</strong>"><strong>Data Processing and Analysis</strong></h3>
+
+<pre><code class="sol"><h1>Create sample data</h1>
+<p>data = [10, 25, 5, 30, 45, 15, 35].</p>
+<p>echo "Original data:".</p>
+<p>echo data.</p>
+
+<h1>Filter and transform data</h1>
+<p>high_values = filter (> 20) data.</p>
+<p>doubled = map (* 2) high_values.</p>
+<p>total = fold + doubled.</p>
+
+<p>echo "High values (>20):".</p>
+<p>echo high_values.</p>
+<p>echo "Doubled high values:".</p>
+<p>echo doubled.</p>
+<p>echo "Sum of doubled high values:".</p>
+<p>echo total.</code></pre>
+
+<h3 id="<strong>Web and Network Operations</strong>"><strong>Web and Network Operations</strong></h3>
+
+<pre><code class="sol"><h1>Network diagnostics</h1>
+<p>echo "=== Network Diagnostics ===".</p>
+
+<h1>DNS lookup</h1>
+<p>github_dns = dns_lookup "github.com".</p>
+<p>echo "GitHub DNS:".</p>
+<p>echo github_dns.</p>
+
+<h1>Port scanning</h1>
+<p>ssh_status = port_scan "github.com" 22.</p>
+<p>https_status = port_scan "github.com" 443.</p>
+<p>echo ssh_status.</p>
+<p>echo https_status.</p>
+
+<h1>Ping test</h1>
+<p>ping_result = ping "8.8.8.8" 3.</p>
+<p>echo "Ping results:".</p>
+<p>echo ping_result.</code></pre>
+
+<h3 id="<strong>Data Format Conversion</strong>"><strong>Data Format Conversion</strong></h3>
+
+<pre><code class="sol"><h1>Working with different data formats</h1>
+<p>sample_data = [</p>
+<p>{"name": "Alice", "age": 30, "city": "New York"},</p>
+<p>{"name": "Bob", "age": 25, "city": "San Francisco"},</p>
+<p>{"name": "Charlie", "age": 35, "city": "Chicago"}</p>
+<p>].</p>
+
+<h1>Convert to JSON</h1>
+<p>json_output = jsonstringify sample_data.</p>
+<p>write "people.json" json_output.</p>
+
+<h1>Create CSV version</h1>
+<p>csv_data = [</p>
+<p>["name", "age", "city"],</p>
+<p>["Alice", "30", "New York"],</p>
+<p>["Bob", "25", "San Francisco"],</p>
+<p>["Charlie", "35", "Chicago"]</p>
+<p>].</p>
+<p>csvwrite csv_data "people.csv".</p>
+
+<p>echo "Data saved in both JSON and CSV formats".</code></pre>
+
+<h3 id="<strong>File Compression and Archives</strong>"><strong>File Compression and Archives</strong></h3>
+
+<pre><code class="sol"><h1>Create test files</h1>
+<p>write "document1.txt" "This is the first document with important data.".</p>
+<p>write "document2.txt" "This is the second document with more information.".</p>
+<p>write "document3.txt" "This is the third document completing our dataset.".</p>
+
+<h1>Create different types of archives</h1>
+<p>zip_result = zip_create "documents.zip" "document1.txt" "document2.txt" "document3.txt".</p>
+<p>tar_result = tar_create "documents.tar.gz" "document1.txt" "document2.txt" "document3.txt".</p>
+
+<p>echo zip_result.</p>
+<p>echo tar_result.</p>
+
+<h1>Compress individual file</h1>
+<p>gzip_result = gzip_compress "document1.txt".</p>
+<p>echo gzip_result.</p>
+
+<h1>Extract and verify</h1>
+<p>mkdir "extracted".</p>
+<p>zip_extract "documents.zip" "extracted".</p>
+<p>ls "extracted".</code></pre>
+
+<h3 id="<strong>Environment and Process Management</strong>"><strong>Environment and Process Management</strong></h3>
+
+<pre><code class="sol"><h1>Environment variables</h1>
+<p>home_dir = getenv "HOME".</p>
+<p>path_var = getenv "PATH".</p>
+<p>echo + "Home directory: " home_dir.</p>
+
+<h1>Set custom environment variable</h1>
+<p>setenv "MY_APP_CONFIG" "/etc/myapp.conf".</p>
+<p>config_path = getenv "MY_APP_CONFIG".</p>
+<p>echo + "Config path: " config_path.</p>
+
+<h1>Process information</h1>
+<p>running_processes = processes.</p>
+<p>echo "Top running processes:".</p>
+<p>echo running_processes.</code></pre>
+
+<h3 id="<strong>Advanced Functional Programming</strong>"><strong>Advanced Functional Programming</strong></h3>
+
+<pre><code class="sol"><h1>Complex data transformation pipeline</h1>
+<p>numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].</p>
+
+<h1>Create reusable functions</h1>
+<p>is_even = filter (== 0).</p>
+<p>multiply_by_three = map (* 3).</p>
+<p>greater_than_ten = filter (> 10).</p>
+
+<h1>Process even numbers</h1>
+<p>even_numbers = is_even (map (% 2) numbers).  # Get remainders, then filter zeros</p>
+<p>tripled_evens = multiply_by_three even_numbers.</p>
+<p>big_tripled_evens = greater_than_ten tripled_evens.</p>
+
+<p>echo "Original numbers:".</p>
+<p>echo numbers.</p>
+<p>echo "Even numbers tripled (>10):".</p>
+<p>echo big_tripled_evens.</p>
+
+<h1>Statistical operations</h1>
+<p>sum_all = fold + numbers.</p>
+<p>count = fold + (map (* 0) numbers).  # Convert to zeros, then count</p>
+<p>average = / sum_all count.</p>
+
+<p>echo + "Average: " (to_string average).</code></pre>
+
+<h3 id="<strong>File Management and Git Workflow</strong>"><strong>File Management and Git Workflow</strong></h3>
+
+<pre><code class="sol"><h1>Project setup and file management</h1>
+<p>echo "=== Setting up project structure ===".</p>
+
+<h1>Create project directories</h1>
+<p>mkdir "my_project".</p>
+<p>mkdir "my_project/src".</p>
+<p>mkdir "my_project/docs".</p>
+<p>mkdir "my_project/tests".</p>
+
+<h1>Create some sample files</h1>
+<p>write "my_project/README.md" "# My Project\n\nThis is a sample project.".</p>
+<p>write "my_project/src/main.py" "print('Hello World')".</p>
+<p>write "my_project/tests/test_main.py" "# Test file".</p>
+
+<h1>Copy important files</h1>
+<p>cp "my_project/README.md" "my_project/docs/README_backup.md".</p>
+
+<h1>Set executable permissions for scripts</h1>
+<p>chmod "my_project/src/main.py" "755".</p>
+
+<h1>Find all Python files</h1>
+<p>python_files = find "my_project" "*.py".</p>
+<p>echo "Python files found:".</p>
+<p>echo python_files.</p>
+
+<h1>Check directory size</h1>
+<p>project_size = du "my_project".</p>
+<p>echo "Project size information:".</p>
+<p>echo project_size.</code></pre>
+
+<h3 id="<strong>Git Version Control Workflow</strong>"><strong>Git Version Control Workflow</strong></h3>
+
+<pre><code class="sol"><h1>Initialize and set up git repository (assumes git repo exists)</h1>
+<p>echo "=== Git workflow demonstration ===".</p>
+
+<h1>Check current status</h1>
+<p>status = git_status.</p>
+<p>echo "Current git status:".</p>
+<p>echo status.</p>
+
+<h1>Quick update workflow</h1>
+<p>echo "Performing quick update...".</p>
+<p>update_result = gitupdate.</p>
+<p>echo update_result.</p>
+
+<h1>View recent commits</h1>
+<p>echo "Recent commit history:".</p>
+<p>commits = git_log 5.</p>
+<p>echo commits.</p>
+
+<h1>Full sync with remote</h1>
+<p>echo "Performing full sync...".</p>
+<p>sync_result = gitsync.</p>
+<p>echo sync_result.</p>
+
+<h1>Check branches</h1>
+<p>echo "Available branches:".</p>
+<p>branches = git_branch.</p>
+<p>echo branches.</code></pre>
+
+<h3 id="<strong>Integrated Project Management</strong>"><strong>Integrated Project Management</strong></h3>
+
+<pre><code class="sol"><h1>Combined filesystem and git operations</h1>
+<p>echo "=== Integrated project management ===".</p>
+
+<h1>Create a new feature</h1>
+<p>mkdir "feature_branch".</p>
+<p>write "feature_branch/new_feature.py" "# New feature implementation".</p>
+
+<h1>Copy to main project</h1>
+<p>cp "feature_branch/new_feature.py" "my_project/src/".</p>
+
+<h1>Clean up temporary directory</h1>
+<p>rm "feature_branch".</p>
+
+<h1>Stage and commit the changes</h1>
+<p>git_add "my_project/src/new_feature.py".</p>
+<p>commit_result = git_commit "Add new feature implementation".</p>
+<p>echo commit_result.</p>
+
+<h1>Push to remote</h1>
+<p>push_result = git_push.</p>
+<p>echo push_result.</p>
+
+<h1>Verify the changes</h1>
+<p>final_status = git_status.</p>
+<p>echo "Final status:".</p>
+<p>echo final_status.</code></pre>
+
+<h3 id="<strong>Nested Data Structure Manipulation</strong>"><strong>Nested Data Structure Manipulation</strong></h3>
+
+<pre><code class="sol"><h1>Complex nested data structure</h1>
+<p>company_data = {</p>
+<p>"company": "Tech Corp",</p>
+<p>"employees": [</p>
+<p>{"name": "Alice", "department": "Engineering", "salary": 95000},</p>
+<p>{"name": "Bob", "department": "Marketing", "salary": 75000},</p>
+<p>{"name": "Charlie", "department": "Engineering", "salary": 105000}</p>
+<p>],</p>
+<p>"locations": ["New York", "San Francisco", "Austin"]</p>
+<p>}.</p>
+
+<h1>Access nested data</h1>
+<p>company_name = company_data|company.</p>
+<p>first_employee = company_data|employees|1.</p>
+<p>first_location = company_data|locations|1.</p>
+
+<p>echo + "Company: " company_name.</p>
+<p>echo "First employee:".</p>
+<p>echo first_employee.</p>
+<p>echo + "First location: " first_location.</p>
+
+<h1>Modify nested data</h1>
+<p>updated_data = set company_data "employees|1|salary" 100000.</p>
+<p>alice_new_salary = updated_data|employees|1|salary.</p>
+<p>echo + "Alice's updated salary: " (to_string alice_new_salary).</code></pre>
+
+<h2 id="IMPLEMENTATION">IMPLEMENTATION</h2>
+
+<p>Sol is implemented using:</p>
+
+<ul>
+<li><strong>pyparsing</strong> for robust syntax parsing with detailed error messages</li>
+<li><strong>Python standard library</strong> for all operations (no external dependencies)</li>
+<li><strong>Functional design</strong> inspired by Haskell and modern functional languages</li>
+<li><strong>Clean architecture</strong> with separation between parsing, execution, and standard library</li>
+</ul>
+
+<p>Key features:</p>
+
+<ul>
+<li><strong>Zero external dependencies</strong> - Everything uses Python's built-in libraries</li>
+<li><strong>Comprehensive error handling</strong> - Detailed error messages with suggestions</li>
+<li><strong>Partial function support</strong> - Create reusable function objects</li>
+<li><strong>Rich data structures</strong> - Arrays, dictionaries, and nested combinations</li>
+<li><strong>1-indexed arrays</strong> - Natural counting for non-programmers</li>
+<li><strong>Intuitive access syntax</strong> - Chain property access with <code>|</code> separator</li>
+</ul>
+
+<p>The parser generates an AST-like structure and executes it using Python's built-in libraries, providing access to Python's vast ecosystem without requiring external system tools or packages.</p>
+
+<h2 id="PROJECT STRUCTURE">PROJECT STRUCTURE</h2>
+
+<pre><code class="">sol/
+<p>├── main.py              # Sol interpreter, parser, and standard library</p>
+<p>├── DESIGN.md           # Language design document and philosophy</p>
+<p>├── README.md           # This comprehensive documentation</p>
+<p>├── pyproject.toml      # Project configuration and dependencies</p>
+<p>├── uv.lock            # Lock file for reproducible builds</p>
+<p>├── examples/          # Example Sol scripts and demonstrations</p>
+<p>│   ├── simple.sol     # Basic language features</p>
+<p>│   ├── comprehensive.sol  # Advanced functionality showcase</p>
+<p>│   ├── networking.sol # Network operations examples</p>
+<p>│   └── filesystem_clean.sol  # File management examples</p>
+<p>├── debug/            # Debug and test scripts</p>
+<p>├── tests/           # Test suite</p>
+<p>└── demo_project/    # Sample project structure</code></pre>
+
+<h2 id="LANGUAGE PHILOSOPHY">LANGUAGE PHILOSOPHY</h2>
+
+<p>Sol is designed around several core principles:</p>
+
+<p>1. <strong>Readability First</strong> - Code should read like natural language</p>
+<p>2. <strong>Minimal Syntax</strong> - Less cognitive overhead, more focus on problem-solving</p>
+<p>3. <strong>Batteries Included</strong> - Rich standard library for common tasks</p>
+<p>4. <strong>Functional Style</strong> - Encourage immutable data and function composition</p>
+<p>5. <strong>Helpful Errors</strong> - Detailed error messages with suggestions and context</p>
+<p>6. <strong>Zero Setup</strong> - No package management, no build systems, just Python</p>
+
+<p>Sol bridges the gap between shell scripting and full programming languages, offering the simplicity of shell commands with the power and structure of modern functional programming.</p>
+
+        </main>
+    </div>
+</body>
+</html>
