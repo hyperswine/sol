@@ -7,8 +7,6 @@ from toolz import pipe, curry, compose, get_in, assoc_in
 from dataclasses import dataclass, field
 from stdlib import FUNCTION_MAP
 
-# Immutable data structures for interpreter state
-
 
 @dataclass(frozen=True)
 class Environment:
@@ -52,8 +50,6 @@ class PartialFunction:
   def __str__(self) -> str:
     return f"PartialFunction({self.func.__name__}, {self.args})"
 
-# Pure functions for expression processing
-
 
 def process_string_literal(token_tuple: Tuple[str, str]) -> str:
   """Process string literal token (pure function)"""
@@ -78,7 +74,8 @@ def process_variable_reference(name: str, env: Environment) -> Any:
     else:
       return int(name)
   except ValueError:
-    return name  # Return as string if can't parse as number
+    # Return as string if can't parse as number
+    return name
 
 
 def process_array_elements(elements: List[Any], env: Environment) -> List[Any]:
@@ -233,8 +230,6 @@ def _apply_accessor(current_obj: Any, accessor: Any, env: Environment) -> Any:
     raise TypeError(
         f"Cannot access property '{key}' of {type(current_obj).__name__}")
 
-# Function execution using functional composition
-
 
 def execute_function_call(call_parts: List[Any], env: Environment) -> Tuple[Any, Environment]:
   """Execute a function call (returns result and potentially new environment)"""
@@ -358,8 +353,6 @@ def _execute_builtin_function(func_name: str, func: Callable, processed_args: Li
   except Exception as e:
     return f"Runtime error in function '{func_name}': {str(e)}", env
 
-# Statement execution using functional composition
-
 
 def execute_statement(stmt: Any, env: Environment) -> Tuple[Union[str, Dict[str, Any]], Environment]:
   """Execute a single parsed statement (returns result and new environment)"""
@@ -440,8 +433,6 @@ def _process_single_assignment_value(single_value: Any, env: Environment) -> Any
     result, _ = execute_function_call([single_value], env)
     return result
 
-# Main interpreter class using functional composition
-
 
 class SolInterpreter:
   """Sol interpreter using functional programming principles"""
@@ -466,6 +457,8 @@ class SolInterpreter:
 
     results = []
     current_env = self.environment
+
+    # SHOULD BE MADE MORE FUNCTIONAL. Could just use a foreach or fold. Best to use fold so we have acc as new env
 
     # Process statements in pairs (statement group + period)
     i = 0
@@ -510,8 +503,6 @@ class SolInterpreter:
     """Get a variable from the current environment"""
     return self.environment.get_variable(name)
 
-# Factory functions for creating interpreters
-
 
 def create_interpreter(debug: bool = False) -> SolInterpreter:
   """Factory function to create an interpreter"""
@@ -521,8 +512,6 @@ def create_interpreter(debug: bool = False) -> SolInterpreter:
 def create_debug_interpreter() -> SolInterpreter:
   """Factory function to create a debug interpreter"""
   return SolInterpreter(debug=True)
-
-# High-level composition functions
 
 
 def parse_and_interpret(parser, code: str, debug: bool = False) -> Tuple[Any, Dict[str, Any]]:

@@ -71,7 +71,7 @@ def run_script_file(script_path: str, debug: bool = False) -> None:
       print(f"Parse error: {parsed}")
       sys.exit(1)
 
-    results, variables = interpreter.run(parsed, print_immediately=True)
+    results, _ = interpreter.run(parsed, print_immediately=True)
 
     # Handle any results or errors
     if isinstance(results, str):
@@ -124,14 +124,15 @@ def run_interactive_mode(debug: bool = False) -> None:
       # Parse and execute using functional composition
       parsed = parser.parse(code)
       if isinstance(parsed, str):
-        print(parsed)  # Print parse error
+        print(parsed)
         continue
 
       results, variables = interpreter.run(parsed, print_immediately=True)
 
       # Results are already printed during execution when print_immediately=True
       # Only need to handle the case where results is a parse error string
-      if isinstance(results, str):  # Parse error (shouldn't happen with print_immediately=True)
+      # Parse error (shouldn't happen with print_immediately=True)
+      if isinstance(results, str):
         print(results)
 
     except KeyboardInterrupt:

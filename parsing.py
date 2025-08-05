@@ -6,10 +6,9 @@ from functools import partial
 from toolz import pipe, curry, compose
 from dataclasses import dataclass, field
 
-# Lazy import of pyparsing to avoid startup overhead
-
 
 def _import_pyparsing():
+
   try:
     from pyparsing import (
         Word, alphas, alphanums, QuotedString, Optional as PyParsingOptional,
@@ -28,8 +27,6 @@ def _import_pyparsing():
   except ImportError:
     raise ImportError(
         "pyparsing library not found. Install with: pip install pyparsing")
-
-# Data structures for AST representation
 
 
 @dataclass(frozen=True)
@@ -54,8 +51,6 @@ class Statement:
   type: str
   expression: Expression
   line_number: int = 0
-
-# Pure parsing functions using functional composition
 
 
 @curry
@@ -104,7 +99,6 @@ def _get_parsing_hint(line: str, parse_err: Any) -> str:
   line_lower = line.lower()
   col = getattr(parse_err, 'col', 0)
 
-  # Common syntax issues
   if '"' in line and line.count('"') % 2 != 0:
     return "Unmatched quote - make sure all strings are properly quoted"
   elif '[' in line and ']' not in line:
@@ -140,12 +134,10 @@ class SolGrammar:
     """Build the Sol grammar using functional composition"""
     pp = self._pyparsing
 
-    # Basic tokens
     identifier = pp['Word'](pp['alphas'], pp['alphanums'] + "_'")
     operator = pp['oneOf']("+ - * / < > = ! <= >= == !=")
     function_name = operator | identifier
 
-    # Literals with functional transformations
     string_literal = pp['QuotedString']('"', escChar='\\').setParseAction(
         lambda t: ("STRING_LITERAL", t[0])
     )
@@ -154,21 +146,18 @@ class SolGrammar:
         lambda t: float(t[0]) if '.' in t[0] else int(t[0])
     )
 
-    # Forward declarations for recursive structures
     array_element = pp['Forward']()
     dict_value = pp['Forward']()
     base_expr = pp['Forward']()
     function_call = pp['Forward']()
     argument = pp['Forward']()
 
-    # Array literal using functional composition
     array_literal = (
         pp['Suppress']("[") +
         pp['Optional'](array_element + pp['ZeroOrMore'](pp['Suppress'](",") + array_element)) +
         pp['Suppress']("]")
     ).setParseAction(lambda t: ("ARRAY_LITERAL", list(t)))
 
-    # Dictionary literal using functional composition
     dict_key = string_literal | identifier
     dict_pair = dict_key + pp['Suppress'](":") + dict_value
     dict_literal = (
@@ -177,7 +166,6 @@ class SolGrammar:
         pp['Suppress']("}")
     ).setParseAction(self._create_dict_handler())
 
-    # Access expressions using pipe operator
     var_reference = (
         pp['Suppress']("(") + identifier + pp['Suppress'](")")
     ).setParseAction(lambda t: ("VAR_REF", t[0]))
@@ -187,12 +175,10 @@ class SolGrammar:
         base_expr + pp['OneOrMore'](pp['Suppress']("|") + access_key)
     ).setParseAction(lambda t: ("ACCESS", list(t)))
 
-    # Parenthesized expressions
     parenthesized_expr = (
         pp['Suppress']("(") + function_call + pp['Suppress'](")")
     ).setParseAction(lambda t: ("PARENTHESIZED", list(t)))
 
-    # Update forward declarations
     array_element <<= (dict_literal | array_literal | string_literal | number |
                        access_expr | parenthesized_expr | operator | identifier)
     dict_value <<= (dict_literal | array_literal | string_literal | number |
@@ -202,10 +188,8 @@ class SolGrammar:
     argument <<= (access_expr | dict_literal | array_literal | string_literal |
                   number | parenthesized_expr | operator | identifier)
 
-    # Function calls
     function_call <<= function_name + pp['ZeroOrMore'](argument)
 
-    # Values and assignments
     value = (access_expr | function_call | dict_literal | array_literal |
              string_literal | number | parenthesized_expr | identifier)
 
@@ -213,7 +197,6 @@ class SolGrammar:
     lhs = identifier + pp['ZeroOrMore'](identifier)
     assignment = lhs + equals + value
 
-    # Statements
     statement = pp['Group'](assignment | function_call) + pp['Literal'](".")
 
     return statement
@@ -221,7 +204,8 @@ class SolGrammar:
   def _create_dict_handler(self) -> Callable:
     """Create dictionary parsing handler using functional composition"""
     def handle_dict(tokens):
-      # Convert list of key-value pairs to dictionary representation
+
+      # THIS SHOULD BE CLEANED UP, made functional
       dict_items = []
       for i in range(0, len(tokens), 2):
         if i + 1 < len(tokens):
@@ -260,7 +244,7 @@ class SolParser:
   def parse(self, code: str) -> Union[List[Any], str]:
     """Parse Sol code into AST-like structure using functional composition"""
     try:
-      # Use functional composition to process the code
+
       result = pipe(
           code,
           clean_code_lines,
@@ -287,8 +271,6 @@ class SolParser:
       all_parsed.extend(result)
     return all_parsed
 
-# Factory functions for creating parsers
-
 
 def create_parser(debug: bool = False) -> SolParser:
   """Factory function to create a parser"""
@@ -298,8 +280,6 @@ def create_parser(debug: bool = False) -> SolParser:
 def create_debug_parser() -> SolParser:
   """Factory function to create a debug parser"""
   return SolParser(debug=True)
-
-# Utility functions for working with parsed results
 
 
 @curry
@@ -332,8 +312,6 @@ def transform_tokens(transformer: Callable[[Any], Any], parsed_result: List[Any]
       return item
 
   return [transform_recursive(item) for item in parsed_result]
-
-# Composition helpers
 
 
 def compose_parsers(*parsers: Callable) -> Callable:

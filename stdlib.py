@@ -11,8 +11,6 @@ from typing import Any, Dict, List, Union, Callable, Optional
 from functools import partial, reduce
 from toolz import pipe, curry, compose
 
-# Lazy imports - import heavy dependencies only when needed
-
 
 def _import_requests():
   try:
@@ -50,7 +48,6 @@ def _import_psutil():
         "psutil library not found. Install with: pip install psutil")
 
 
-# Core filesystem operations
 @curry
 def ls(path: Optional[str] = None) -> Union[List[str], str]:
   """List directory contents using pathlib"""
@@ -160,8 +157,6 @@ def find(pattern: str, path: str = ".") -> List[str]:
   except Exception as e:
     return [f"Error finding files: {e}"]
 
-# Web operations using requests
-
 
 @curry
 def wget(url: str) -> str:
@@ -192,8 +187,6 @@ def post(url: str, data: Optional[Dict[str, Any]] = None) -> str:
   except Exception as e:
     return f"Error making POST request to {url}: {e}"
 
-# Hash functions using hashlib
-
 
 @curry
 def md5(text: Any) -> str:
@@ -205,8 +198,6 @@ def md5(text: Any) -> str:
 def sha256(text: Any) -> str:
   """Calculate SHA256 hash using hashlib"""
   return hashlib.sha256(str(text).encode()).hexdigest()
-
-# Git operations using GitPython
 
 
 @curry
@@ -302,8 +293,6 @@ def git_branch(repo_path: str = ".") -> str:
   except Exception as e:
     return f"Error getting git branches: {e}"
 
-# Network operations
-
 
 @curry
 def ping(host: str) -> str:
@@ -339,8 +328,6 @@ def nmap_scan(target: str) -> str:
     return "\n".join(output) if output else "No hosts found"
   except Exception as e:
     return f"Error scanning {target}: {e}"
-
-# System information using psutil
 
 
 def cpu_count() -> int:
@@ -383,8 +370,6 @@ def disk_usage(path: str = "/") -> Dict[str, Any]:
   except Exception as e:
     return {'error': str(e)}
 
-# Mathematical operations
-
 
 @curry
 def add(*args) -> Union[int, float, str]:
@@ -420,8 +405,6 @@ def divide(a: Union[int, float], b: Union[int, float]) -> Union[int, float]:
     raise ValueError("Division by zero")
   return a / b
 
-# Comparison functions that return predicates
-
 
 @curry
 def greater_than(threshold: Union[int, float], value: Union[int, float]) -> bool:
@@ -439,8 +422,6 @@ def less_than(threshold: Union[int, float], value: Union[int, float]) -> bool:
 def equals(expected: Any, value: Any) -> bool:
   """Create equality predicate"""
   return value == expected
-
-# Higher-order functions using toolz
 
 
 @curry
@@ -462,8 +443,6 @@ def fold_func(func: Callable, iterable: List[Any], initial: Any = None) -> Any:
     return reduce(func, iterable, initial)
   else:
     return reduce(func, iterable)
-
-# JSON operations
 
 
 @curry
@@ -504,8 +483,6 @@ def jsonstringify(data: Any) -> str:
   except Exception as e:
     return f"Error converting to JSON: {e}"
 
-# CSV operations
-
 
 @curry
 def csvread(filepath: str, delimiter: str = ",", has_header: bool = True) -> Union[List[Dict[str, str]], List[List[str]], str]:
@@ -544,8 +521,6 @@ def csvwrite(data: Union[List[Dict[str, Any]], List[List[Any]]], filepath: str, 
   except Exception as e:
     return f"Error writing CSV file: {e}"
 
-# Type conversion functions
-
 
 @curry
 def to_number(value: Any) -> Union[int, float, str]:
@@ -564,14 +539,10 @@ def to_string(value: Any) -> str:
   """Convert value to string"""
   return str(value)
 
-# Progress and utility functions
-
 
 def progress(value: Any) -> Any:
   """Simple progress indicator (placeholder for now)"""
   return value
-
-# Environment functions
 
 
 @curry
@@ -592,7 +563,6 @@ def listenv() -> Dict[str, str]:
   return dict(os.environ)
 
 
-# Create a function map for easy lookup
 FUNCTION_MAP = {
     # Filesystem operations
     'ls': ls,
