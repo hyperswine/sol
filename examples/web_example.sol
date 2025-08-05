@@ -1,4 +1,5 @@
 #!/usr/bin/env sol
+
 # Web utilities example
 
 echo "=== Web Utilities Example ===".

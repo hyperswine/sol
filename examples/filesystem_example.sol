@@ -1,4 +1,5 @@
 #!/usr/bin/env sol
+
 # File system operations example
 
 echo "=== File System Operations ===".
