@@ -188,23 +188,23 @@ def git_status(repo_path: str = ".") -> str:
         git = _import_gitpython()
         repo = git.Repo(repo_path)
         status_output = []
-        
+
         # Get status
         if repo.is_dirty():
             status_output.append("Modified files:")
             for item in repo.index.diff(None):
                 status_output.append(f"  M {item.a_path}")
-        
+
         # Get untracked files
         untracked = repo.untracked_files
         if untracked:
             status_output.append("Untracked files:")
             for file in untracked:
                 status_output.append(f"  ?? {file}")
-        
+
         if not status_output:
             status_output.append("Working directory clean")
-        
+
         return "\n".join(status_output)
     except Exception as e:
         return f"Error getting git status: {e}"
@@ -275,7 +275,7 @@ def ping(host: str) -> str:
     """Ping host using system ping command"""
     try:
         import subprocess
-        result = subprocess.run(['ping', '-c', '4', host], 
+        result = subprocess.run(['ping', '-c', '4', host],
                               capture_output=True, text=True, timeout=10)
         return result.stdout if result.returncode == 0 else f"Ping failed: {result.stderr}"
     except Exception as e:
@@ -288,18 +288,18 @@ def nmap_scan(target: str) -> str:
         nmap = _import_nmap()
         nm = nmap.PortScanner()
         result = nm.scan(target, '22-443')
-        
+
         output = []
         for host in nm.all_hosts():
             output.append(f"Host: {host} ({nm[host].hostname()})")
             output.append(f"State: {nm[host].state()}")
-            
+
             for protocol in nm[host].all_protocols():
                 ports = nm[host][protocol].keys()
                 for port in ports:
                     state = nm[host][protocol][port]['state']
                     output.append(f"Port {port}/{protocol}: {state}")
-        
+
         return "\n".join(output) if output else "No hosts found"
     except Exception as e:
         return f"Error scanning {target}: {e}"
@@ -349,7 +349,7 @@ def add(*args) -> Union[int, float, str]:
     """Add numbers or concatenate strings"""
     if not args:
         return 0
-    
+
     result = args[0]
     for arg in args[1:]:
         if isinstance(result, str) or isinstance(arg, str):
@@ -534,16 +534,16 @@ FUNCTION_MAP = {
     'mv': mv,
     'touch': touch,
     'find': find,
-    
+
     # Web operations
     'wget': wget,
     'get': get,
     'post': post,
-    
+
     # Hash functions
     'md5': md5,
     'sha256': sha256,
-    
+
     # Git operations
     'git_status': git_status,
     'git_add': git_add,
@@ -551,46 +551,46 @@ FUNCTION_MAP = {
     'git_push': git_push,
     'git_pull': git_pull,
     'git_branch': git_branch,
-    
+
     # Network operations
     'ping': ping,
     'nmap': nmap_scan,
-    
+
     # System information
     'cpu_count': cpu_count,
     'memory': memory_info,
     'disk_usage': disk_usage,
-    
+
     # Mathematical operations
     '+': add,
     '-': subtract,
     '*': multiply,
     '/': divide,
-    
+
     # Comparison functions
     '>': greater_than,
     '<': less_than,
     '==': equals,
-    
+
     # Higher-order functions
     'map': map_func,
     'filter': filter_func,
     'fold': fold_func,
-    
+
     # JSON operations
     'jsonread': jsonread,
     'jsonwrite': jsonwrite,
     'jsonparse': jsonparse,
     'jsonstringify': jsonstringify,
-    
+
     # CSV operations
     'csvread': csvread,
     'csvwrite': csvwrite,
-    
+
     # Type conversion
     'to_number': to_number,
     'to_string': to_string,
-    
+
     # Utility functions
     'progress': progress,
     'getenv': getenv,

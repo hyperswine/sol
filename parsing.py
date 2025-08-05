@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 def _import_pyparsing():
     try:
         from pyparsing import (
-            Word, alphas, alphanums, QuotedString, Optional as PyParsingOptional, 
+            Word, alphas, alphanums, QuotedString, Optional as PyParsingOptional,
             ZeroOrMore, OneOrMore, Literal, Forward, Group, Keyword, ParseException,
             Regex, Suppress, LineEnd, nums, oneOf, ParseResults
         )
@@ -34,7 +34,7 @@ class Token:
     value: Any
     position: int = 0
 
-@dataclass(frozen=True)  
+@dataclass(frozen=True)
 class Expression:
     """Immutable expression representation"""
     type: str
@@ -54,13 +54,13 @@ def clean_code_lines(code: str) -> List[Tuple[str, int, str]]:
     """Clean code by removing comments and empty lines (pure function)"""
     lines = code.split('\n')
     filtered_lines = []
-    
+
     for line_num, line in enumerate(lines, 1):
         original_line = line
         line = line.strip()
         if line and not line.startswith('#'):
             filtered_lines.append((line, line_num, original_line))
-    
+
     return filtered_lines
 
 @curry
@@ -117,93 +117,93 @@ def _get_parsing_hint(line: str, parse_err: Any) -> str:
 
 class SolGrammar:
     """Sol language grammar definition using functional composition"""
-    
+
     def __init__(self):
         self._pyparsing = _import_pyparsing()
         self.grammar = self._build_grammar()
-    
+
     def _build_grammar(self):
         """Build the Sol grammar using functional composition"""
         pp = self._pyparsing
-        
+
         # Basic tokens
         identifier = pp['Word'](pp['alphas'], pp['alphanums'] + "_'")
         operator = pp['oneOf']("+ - * / < > = ! <= >= == !=")
         function_name = operator | identifier
-        
+
         # Literals with functional transformations
         string_literal = pp['QuotedString']('"', escChar='\\').setParseAction(
             lambda t: ("STRING_LITERAL", t[0])
         )
-        
+
         number = pp['Regex'](r'-?\d+(\.\d+)?').setParseAction(
             lambda t: float(t[0]) if '.' in t[0] else int(t[0])
         )
-        
+
         # Forward declarations for recursive structures
         array_element = pp['Forward']()
         dict_value = pp['Forward']()
         base_expr = pp['Forward']()
         function_call = pp['Forward']()
         argument = pp['Forward']()
-        
+
         # Array literal using functional composition
         array_literal = (
-            pp['Suppress']("[") + 
-            pp['Optional'](array_element + pp['ZeroOrMore'](pp['Suppress'](",") + array_element)) + 
+            pp['Suppress']("[") +
+            pp['Optional'](array_element + pp['ZeroOrMore'](pp['Suppress'](",") + array_element)) +
             pp['Suppress']("]")
         ).setParseAction(lambda t: ("ARRAY_LITERAL", list(t)))
-        
+
         # Dictionary literal using functional composition
         dict_key = string_literal | identifier
         dict_pair = dict_key + pp['Suppress'](":") + dict_value
         dict_literal = (
-            pp['Suppress']("{") + 
-            pp['Optional'](dict_pair + pp['ZeroOrMore'](pp['Suppress'](",") + dict_pair)) + 
+            pp['Suppress']("{") +
+            pp['Optional'](dict_pair + pp['ZeroOrMore'](pp['Suppress'](",") + dict_pair)) +
             pp['Suppress']("}")
         ).setParseAction(self._create_dict_handler())
-        
+
         # Access expressions using pipe operator
         var_reference = (
             pp['Suppress']("(") + identifier + pp['Suppress'](")")
         ).setParseAction(lambda t: ("VAR_REF", t[0]))
-        
+
         access_key = string_literal | number | var_reference | identifier
         access_expr = (
             base_expr + pp['OneOrMore'](pp['Suppress']("|") + access_key)
         ).setParseAction(lambda t: ("ACCESS", list(t)))
-        
+
         # Parenthesized expressions
         parenthesized_expr = (
             pp['Suppress']("(") + function_call + pp['Suppress'](")")
         ).setParseAction(lambda t: ("PARENTHESIZED", list(t)))
-        
+
         # Update forward declarations
-        array_element <<= (dict_literal | array_literal | string_literal | number | 
+        array_element <<= (dict_literal | array_literal | string_literal | number |
                           access_expr | parenthesized_expr | operator | identifier)
-        dict_value <<= (dict_literal | array_literal | string_literal | number | 
+        dict_value <<= (dict_literal | array_literal | string_literal | number |
                        access_expr | parenthesized_expr | operator | identifier)
-        base_expr <<= (dict_literal | array_literal | string_literal | number | 
+        base_expr <<= (dict_literal | array_literal | string_literal | number |
                       parenthesized_expr | identifier)
-        argument <<= (access_expr | dict_literal | array_literal | string_literal | 
+        argument <<= (access_expr | dict_literal | array_literal | string_literal |
                      number | parenthesized_expr | operator | identifier)
-        
+
         # Function calls
         function_call <<= function_name + pp['ZeroOrMore'](argument)
-        
+
         # Values and assignments
-        value = (access_expr | function_call | dict_literal | array_literal | 
+        value = (access_expr | function_call | dict_literal | array_literal |
                 string_literal | number | parenthesized_expr | identifier)
-        
+
         equals = pp['Literal']("=")
         lhs = identifier + pp['ZeroOrMore'](identifier)
         assignment = lhs + equals + value
-        
+
         # Statements
         statement = pp['Group'](assignment | function_call) + pp['Literal'](".")
-        
+
         return statement
-    
+
     def _create_dict_handler(self) -> Callable:
         """Create dictionary parsing handler using functional composition"""
         def handle_dict(tokens):
@@ -219,29 +219,29 @@ class SolGrammar:
 
 class SolParser:
     """Main Sol parser using functional composition"""
-    
+
     def __init__(self, debug: bool = False):
         self.grammar = SolGrammar()
         self.debug = debug
-    
+
     def debug_print(self, message: str) -> None:
         """Print debug message if debug mode is enabled"""
         if self.debug:
             print(f"DEBUG: {message}")
-    
+
     def parse_single_statement(self, line_data: Tuple[str, int, str]) -> Union[List[Any], str]:
         """Parse a single statement (pure function where possible)"""
         line, line_num, original_line = line_data
-        
+
         if not validate_statement_syntax(line):
             return create_syntax_error(line_num, original_line)
-        
+
         try:
             parsed_stmt = self.grammar.grammar.parseString(line, parseAll=True)
             return list(parsed_stmt)
         except Exception as parse_err:
             return create_parsing_error(line_num, original_line, parse_err)
-    
+
     def parse(self, code: str) -> Union[List[Any], str]:
         """Parse Sol code into AST-like structure using functional composition"""
         try:
@@ -252,16 +252,16 @@ class SolParser:
                 lambda lines: [self.parse_single_statement(line_data) for line_data in lines],
                 self._flatten_parse_results
             )
-            
+
             return result
-            
+
         except Exception as e:
             return (
                 f"Parse error: {e}\n"
                 f"  Hint: Check your syntax - common issues include missing quotes, "
                 f"unmatched brackets, or invalid identifiers"
             )
-    
+
     def _flatten_parse_results(self, results: List[Union[List[Any], str]]) -> Union[List[Any], str]:
         """Flatten parse results, returning error if any parsing failed (pure function)"""
         all_parsed = []
@@ -285,14 +285,14 @@ def create_debug_parser() -> SolParser:
 def extract_tokens_by_type(token_type: str, parsed_result: List[Any]) -> List[Any]:
     """Extract all tokens of a specific type from parsed results"""
     tokens = []
-    
+
     def extract_recursive(item):
         if isinstance(item, tuple) and len(item) == 2 and item[0] == token_type:
             tokens.append(item)
         elif isinstance(item, (list, tuple)):
             for subitem in item:
                 extract_recursive(subitem)
-    
+
     extract_recursive(parsed_result)
     return tokens
 
@@ -308,7 +308,7 @@ def transform_tokens(transformer: Callable[[Any], Any], parsed_result: List[Any]
             return tuple(transform_recursive(subitem) for subitem in item)
         else:
             return item
-    
+
     return [transform_recursive(item) for item in parsed_result]
 
 # Composition helpers

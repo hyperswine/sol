@@ -13,26 +13,26 @@ class Environment:
     """Immutable environment for variable and function storage"""
     variables: Dict[str, Any] = field(default_factory=dict)
     user_functions: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    
+
     def with_variable(self, name: str, value: Any) -> 'Environment':
         """Return new environment with added variable"""
         new_vars = {**self.variables, name: value}
         return Environment(new_vars, self.user_functions)
-    
+
     def with_variables(self, variables: Dict[str, Any]) -> 'Environment':
         """Return new environment with added variables"""
         new_vars = {**self.variables, **variables}
         return Environment(new_vars, self.user_functions)
-    
+
     def with_function(self, name: str, params: List[str], body: List[Any]) -> 'Environment':
         """Return new environment with added user function"""
         new_funcs = {**self.user_functions, name: {'params': params, 'body': body}}
         return Environment(self.variables, new_funcs)
-    
+
     def get_variable(self, name: str) -> Any:
         """Get variable value"""
         return self.variables.get(name)
-    
+
     def get_function(self, name: str) -> Optional[Dict[str, Any]]:
         """Get user function definition"""
         return self.user_functions.get(name)
@@ -42,10 +42,10 @@ class PartialFunction:
     """Represents a partial function application using immutable structure"""
     func: Callable[..., Any]
     args: Tuple[Any, ...]
-    
+
     def __call__(self, *more_args: Any) -> Any:
         return self.func(*(self.args + more_args))
-    
+
     def __str__(self) -> str:
         return f"PartialFunction({self.func.__name__}, {self.args})"
 
@@ -63,7 +63,7 @@ def process_variable_reference(name: str, env: Environment) -> Any:
     value = env.get_variable(name)
     if value is not None:
         return value
-    
+
     # Try to parse as number if not found as variable
     try:
         if '.' in name:
@@ -94,7 +94,7 @@ def process_array_elements(elements: List[Any], env: Environment) -> List[Any]:
             result.append(process_number_literal(element))
         else:
             result.append(element)
-    
+
     return result
 
 def process_dict_elements(pairs: List[Tuple[Any, Any]], env: Environment) -> Dict[str, Any]:
@@ -143,7 +143,7 @@ def process_access_expression(access_parts: List[Any], env: Environment) -> Any:
     # Get the base object using functional approach
     base = access_parts[0]
     current_obj = _resolve_base_object(base, env)
-    
+
     if isinstance(current_obj, str) and current_obj.startswith("Error:"):
         return current_obj
 
@@ -170,7 +170,7 @@ def _resolve_base_object(base: Any, env: Environment) -> Any:
             return process_dict_elements(base[1], env)
     elif isinstance(base, (int, float)):
         return base
-    
+
     return f"Error: Cannot access property of {base}"
 
 def _apply_accessor(current_obj: Any, accessor: Any, env: Environment) -> Any:
@@ -198,7 +198,7 @@ def _apply_accessor(current_obj: Any, accessor: Any, env: Environment) -> Any:
         else:
             available_keys = list(current_obj.keys())[:5]
             raise KeyError(f"Key '{key}' not found in dictionary. Available keys: {available_keys}")
-    
+
     elif isinstance(current_obj, list):
         try:
             # Sol uses 1-indexed arrays
@@ -206,14 +206,14 @@ def _apply_accessor(current_obj: Any, accessor: Any, env: Environment) -> Any:
                 index = int(key) - 1
             else:
                 index = int(str(key)) - 1
-            
+
             if 0 <= index < len(current_obj):
                 return current_obj[index]
             else:
                 raise IndexError(f"Index {key} out of range for array (length: {len(current_obj)})")
         except (ValueError, TypeError):
             raise ValueError(f"Invalid array index '{key}' - must be a number")
-    
+
     else:
         raise TypeError(f"Cannot access property '{key}' of {type(current_obj).__name__}")
 
@@ -314,7 +314,7 @@ def _execute_builtin_function(func_name: str, func: Callable, processed_args: Li
         # Special handling for comparison operators that return predicates
         if func_name in ['>', '<', '=='] and len(processed_args) == 1:
             return func(processed_args[0]), env
-        
+
         # Special handling for arithmetic operators
         elif func_name in ['+', '-', '*', '/']:
             if len(processed_args) == 0:
@@ -323,14 +323,14 @@ def _execute_builtin_function(func_name: str, func: Callable, processed_args: Li
                 return PartialFunction(func, (processed_args[0],)), env
             else:
                 return func(*processed_args), env
-        
+
         # Special handling for higher-order functions
         elif func_name in ['map', 'filter', 'fold'] and len(processed_args) == 1:
             return PartialFunction(func, (processed_args[0],)), env
-        
+
         else:
             return func(*processed_args), env
-    
+
     except TypeError as e:
         return f"Error calling function '{func_name}': {str(e)}", env
     except Exception as e:
@@ -364,7 +364,7 @@ def _execute_assignment(stmt_list: List[Any], env: Environment) -> Tuple[Union[s
         func_name = stmt_list[0]
         params = stmt_list[1:eq_index]
         body = stmt_list[eq_index + 1:]
-        
+
         new_env = env.with_function(func_name, params, body)
         return f"Function '{func_name}' defined", new_env
 
@@ -381,7 +381,7 @@ def _execute_assignment(stmt_list: List[Any], env: Environment) -> Tuple[Union[s
 
         new_env = env.with_variable(var_name, result)
         return {var_name: result}, new_env
-    
+
     else:
         error_msg = (
             f"Error: Invalid assignment syntax\n"
@@ -417,16 +417,16 @@ def _process_single_assignment_value(single_value: Any, env: Environment) -> Any
 # Main interpreter class using functional composition
 class SolInterpreter:
     """Sol interpreter using functional programming principles"""
-    
+
     def __init__(self, debug: bool = False):
         self.debug = debug
         self.environment = Environment()
-    
+
     def debug_print(self, message: str) -> None:
         """Print debug message if debug mode is enabled"""
         if self.debug:
             print(f"DEBUG: {message}")
-    
+
     def run(self, parsed_statements: List[Any], print_immediately: bool = True) -> Tuple[Union[List[str], str, None], Dict[str, Any]]:
         """Run parsed statements using functional composition"""
         if isinstance(parsed_statements, str):  # Parse error
@@ -454,7 +454,7 @@ class SolInterpreter:
             # Execute statement functionally
             result, new_env = execute_statement(stmt, current_env)
             current_env = new_env
-            
+
             # Handle results
             if isinstance(result, dict):  # Variable assignment
                 self.environment = current_env  # Update global environment
