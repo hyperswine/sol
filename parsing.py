@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 
 
 def _import_pyparsing():
-
+  """Import pyparsing with proper error handling"""
   try:
     from pyparsing import (
         Word, alphas, alphanums, QuotedString, Optional as PyParsingOptional,
@@ -57,15 +57,14 @@ class Statement:
 def clean_code_lines(code: str) -> List[Tuple[str, int, str]]:
   """Clean code by removing comments and empty lines (pure function)"""
   lines = code.split('\n')
-  filtered_lines = []
 
-  for line_num, line in enumerate(lines, 1):
-    original_line = line
-    line = line.strip()
-    if line and not line.startswith('#'):
-      filtered_lines.append((line, line_num, original_line))
-
-  return filtered_lines
+  # Functional approach using list comprehension with enumerate
+  return [
+    (line.strip(), line_num, original_line)
+    for line_num, original_line in enumerate(lines, 1)
+    for line in [original_line.strip()]
+    if line and not line.startswith('#')
+  ]
 
 
 @curry
@@ -204,14 +203,12 @@ class SolGrammar:
   def _create_dict_handler(self) -> Callable:
     """Create dictionary parsing handler using functional composition"""
     def handle_dict(tokens):
-
-      # THIS SHOULD BE CLEANED UP, made functional
-      dict_items = []
-      for i in range(0, len(tokens), 2):
-        if i + 1 < len(tokens):
-          key = tokens[i]
-          value = tokens[i + 1]
-          dict_items.append((key, value))
+      # Functional approach using list comprehension and range
+      dict_items = [
+        (tokens[i], tokens[i + 1])
+        for i in range(0, len(tokens), 2)
+        if i + 1 < len(tokens)
+      ]
       return ("DICT_LITERAL", dict_items)
     return handle_dict
 
@@ -264,12 +261,13 @@ class SolParser:
 
   def _flatten_parse_results(self, results: List[Union[List[Any], str]]) -> Union[List[Any], str]:
     """Flatten parse results, returning error if any parsing failed (pure function)"""
-    all_parsed = []
-    for result in results:
-      if isinstance(result, str):  # Error case
-        return result
-      all_parsed.extend(result)
-    return all_parsed
+    # Check for errors first using functional approach
+    errors = [result for result in results if isinstance(result, str)]
+    if errors:
+      return errors[0]  # Return first error found
+
+    # Flatten successful results using functional approach
+    return [item for result in results for item in result]
 
 
 def create_parser(debug: bool = False) -> SolParser:
@@ -322,3 +320,18 @@ def compose_parsers(*parsers: Callable) -> Callable:
 def parse_and_transform(parser: SolParser, transformer: Callable) -> Callable[[str], Any]:
   """Create a composed function that parses and transforms code"""
   return compose(transformer, parser.parse)
+
+
+@curry
+def extract_tokens(token_type: str, parsed_result: List[Any]) -> List[Tuple[str, Any]]:
+  """Extract all tokens of a specific type from parsed results"""
+  def extract_recursive(item):
+    """Recursively extract tokens using functional approach"""
+    if isinstance(item, tuple) and len(item) == 2 and item[0] == token_type:
+      return [item]
+    elif isinstance(item, (list, tuple)):
+      return [token for subitem in item for token in extract_recursive(subitem)]
+    else:
+      return []
+
+  return extract_recursive(parsed_result)

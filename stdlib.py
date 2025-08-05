@@ -173,7 +173,8 @@ def wget(url: str) -> str:
 @curry
 def get(url: str) -> str:
   """Make HTTP GET request using requests"""
-  return wget(url)  # This will resolve to the curried function call
+  # This will resolve to the curried function call
+  return wget(url)
 
 
 @curry
@@ -206,25 +207,25 @@ def git_status(repo_path: str = ".") -> str:
   try:
     git = _import_gitpython()
     repo = git.Repo(repo_path)
-    status_output = []
 
-    # Get status
-    if repo.is_dirty():
-      status_output.append("Modified files:")
-      for item in repo.index.diff(None):
-        status_output.append(f"  M {item.a_path}")
+    # Functional approach using list comprehensions and conditional expressions
+    modified_status = (
+        ["Modified files:"] +
+        [f"  M {item.a_path}" for item in repo.index.diff(None)]
+        if repo.is_dirty()
+        else []
+    )
 
-    # Get untracked files
-    untracked = repo.untracked_files
-    if untracked:
-      status_output.append("Untracked files:")
-      for file in untracked:
-        status_output.append(f"  ?? {file}")
+    untracked_status = (
+        ["Untracked files:"] +
+        [f"  ?? {file}" for file in repo.untracked_files]
+        if repo.untracked_files
+        else []
+    )
 
-    if not status_output:
-      status_output.append("Working directory clean")
+    status_output = modified_status + untracked_status
 
-    return "\n".join(status_output)
+    return "\n".join(status_output if status_output else ["Working directory clean"])
   except Exception as e:
     return f"Error getting git status: {e}"
 
@@ -285,11 +286,12 @@ def git_branch(repo_path: str = ".") -> str:
   try:
     git = _import_gitpython()
     repo = git.Repo(repo_path)
-    branches = []
-    for branch in repo.branches:
-      current = "* " if branch == repo.active_branch else "  "
-      branches.append(f"{current}{branch.name}")
-    return "\n".join(branches)
+
+    # Functional approach using map and list comprehension
+    return "\n".join([
+        f"{'* ' if branch == repo.active_branch else '  '}{branch.name}"
+        for branch in repo.branches
+    ])
   except Exception as e:
     return f"Error getting git branches: {e}"
 
@@ -301,7 +303,10 @@ def ping(host: str) -> str:
     import subprocess
     result = subprocess.run(['ping', '-c', '4', host],
                             capture_output=True, text=True, timeout=10)
-    return result.stdout if result.returncode == 0 else f"Ping failed: {result.stderr}"
+    if result.returncode == 0:
+      return result.stdout
+    else:
+      return f"Ping failed: {result.stderr}"
   except Exception as e:
     return f"Error pinging {host}: {e}"
 
@@ -314,16 +319,28 @@ def nmap_scan(target: str) -> str:
     nm = nmap.PortScanner()
     result = nm.scan(target, '22-443')
 
-    output = []
-    for host in nm.all_hosts():
-      output.append(f"Host: {host} ({nm[host].hostname()})")
-      output.append(f"State: {nm[host].state()}")
+    # Functional approach using list comprehensions and pipe
+    def format_host_info(host):
+      """Format information for a single host"""
+      host_lines = [
+          f"Host: {host} ({nm[host].hostname()})",
+          f"State: {nm[host].state()}"
+      ]
 
-      for protocol in nm[host].all_protocols():
-        ports = nm[host][protocol].keys()
-        for port in ports:
-          state = nm[host][protocol][port]['state']
-          output.append(f"Port {port}/{protocol}: {state}")
+      port_lines = [
+          f"Port {port}/{protocol}: {nm[host][protocol][port]['state']}"
+          for protocol in nm[host].all_protocols()
+          for port in nm[host][protocol].keys()
+      ]
+
+      return host_lines + port_lines
+
+    # Generate output using functional composition
+    output = [
+        line
+        for host in nm.all_hosts()
+        for line in format_host_info(host)
+    ]
 
     return "\n".join(output) if output else "No hosts found"
   except Exception as e:
@@ -377,13 +394,15 @@ def add(*args) -> Union[int, float, str]:
   if not args:
     return 0
 
-  result = args[0]
-  for arg in args[1:]:
-    if isinstance(result, str) or isinstance(arg, str):
-      result = str(result) + str(arg)
+  def add_two(a, b):
+    """Helper function to add/concatenate two values"""
+    if isinstance(a, str) or isinstance(b, str):
+      return str(a) + str(b)
     else:
-      result += arg
-  return result
+      return a + b
+
+  # Use functional reduce instead of imperative loop
+  return reduce(add_two, args)
 
 
 @curry
@@ -504,6 +523,7 @@ def csvwrite(data: Union[List[Dict[str, Any]], List[List[Any]]], filepath: str, 
   """Write data to CSV file"""
   try:
     with open(filepath, 'w', newline='', encoding='utf-8') as f:
+      # Functional approach using conditional expressions
       if data and isinstance(data[0], dict):
         # Type-safe handling for dictionary data
         dict_data = [row for row in data if isinstance(row, dict)]
@@ -512,6 +532,9 @@ def csvwrite(data: Union[List[Dict[str, Any]], List[List[Any]]], filepath: str, 
               f, fieldnames=dict_data[0].keys(), delimiter=delimiter)
           writer.writeheader()
           writer.writerows(dict_data)
+        else:
+          # No valid dictionary data
+          pass
       else:
         # Handle list data
         list_data = [row for row in data if isinstance(row, list)]

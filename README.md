@@ -6,7 +6,7 @@ Sol is a modern, minimal, batteries-included scripting language designed for rea
 - **Fast Startup**: Minimal runtime overhead
 - **No Dependencies**: Everything you need is built-in
 
-The implementation of Sol is a very functional (FP) and expression based version of python
+The implementation of Sol is a very functional (FP) and expression based version of python. Its pattern is more like haskell and SML rather than imperative script based.
 
 ```sol
 echo "Hello World".

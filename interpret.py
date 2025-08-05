@@ -80,33 +80,36 @@ def process_variable_reference(name: str, env: Environment) -> Any:
 
 def process_array_elements(elements: List[Any], env: Environment) -> List[Any]:
   """Process array literal elements (pure function with recursion)"""
-  result = []
-  for element in elements:
+  def process_element(element):
+    """Process a single array element"""
     if isinstance(element, tuple) and len(element) == 2:
       if element[0] == "STRING_LITERAL":
-        result.append(process_string_literal(element))
+        return process_string_literal(element)
       elif element[0] == "ARRAY_LITERAL":
-        result.append(process_array_elements(element[1], env))
+        return process_array_elements(element[1], env)
       elif element[0] == "DICT_LITERAL":
-        result.append(process_dict_elements(element[1], env))
+        return process_dict_elements(element[1], env)
       elif element[0] == "ACCESS":
-        result.append(process_access_expression(element[1], env))
+        return process_access_expression(element[1], env)
       else:
-        result.append(element[1])  # Other tuple types
+        return element[1]  # Other tuple types
     elif isinstance(element, str):
-      result.append(process_variable_reference(element, env))
+      return process_variable_reference(element, env)
     elif isinstance(element, (int, float)):
-      result.append(process_number_literal(element))
+      return process_number_literal(element)
     else:
-      result.append(element)
+      return element
 
-  return result
+  # Use map instead of imperative loop
+  return list(map(process_element, elements))
 
 
 def process_dict_elements(pairs: List[Tuple[Any, Any]], env: Environment) -> Dict[str, Any]:
   """Process dictionary key-value pairs (pure function with recursion)"""
-  result = {}
-  for key, value in pairs:
+  def process_pair(key_value_pair):
+    """Process a single key-value pair"""
+    key, value = key_value_pair
+
     # Process key
     if isinstance(key, tuple) and key[0] == "STRING_LITERAL":
       processed_key = process_string_literal(key)
@@ -134,8 +137,10 @@ def process_dict_elements(pairs: List[Tuple[Any, Any]], env: Environment) -> Dic
     else:
       processed_value = value
 
-    result[processed_key] = processed_value
-  return result
+    return (processed_key, processed_value)
+
+  # Use dict comprehension instead of imperative loop
+  return dict(process_pair(pair) for pair in pairs)
 
 
 def process_access_expression(access_parts: List[Any], env: Environment) -> Any:
@@ -455,38 +460,50 @@ class SolInterpreter:
       else:
         return parsed_statements, {}
 
-    results = []
-    current_env = self.environment
+    # Group statements into statement-period pairs using functional approach
+    def group_statements(statements):
+      """Group statements into pairs (statement, period) using functional approach"""
+      def group_helper(acc, remaining):
+        if not remaining:
+          return acc
+        elif len(remaining) >= 2 and remaining[1] == ".":
+          # We have a statement followed by a period
+          return group_helper(acc + [[remaining[0], remaining[1]]], remaining[2:])
+        else:
+          # Single statement (shouldn't happen with our grammar, but handle it)
+          return group_helper(acc + [remaining[0]], remaining[1:])
 
-    # SHOULD BE MADE MORE FUNCTIONAL. Could just use a foreach or fold. Best to use fold so we have acc as new env
+      return group_helper([], statements)
 
-    # Process statements in pairs (statement group + period)
-    i = 0
-    while i < len(parsed_statements):
-      if i + 1 < len(parsed_statements) and parsed_statements[i + 1] == ".":
-        # We have a statement followed by a period
-        stmt = [parsed_statements[i], parsed_statements[i + 1]]
-        i += 2
-      else:
-        # Single statement (shouldn't happen with our grammar, but handle it)
-        stmt = parsed_statements[i]
-        i += 1
+    statement_groups = group_statements(parsed_statements)
 
-      # Execute statement functionally
-      result, new_env = execute_statement(stmt, current_env)
-      current_env = new_env
+    # Execute statements using functional fold pattern
+    def execute_and_accumulate(acc, stmt_group):
+      """Execute a statement group and accumulate results and environment"""
+      results, current_env = acc
+      result, new_env = execute_statement(stmt_group, current_env)
 
-      # Handle results
+      # Handle results functionally
       if isinstance(result, dict):  # Variable assignment
-        self.environment = current_env  # Update global environment
+        # Update global environment
+        self.environment = new_env
+        return (results, new_env)
       else:  # Direct output
         result_str = str(result)
         if print_immediately:
           print(result_str)
+          return (results, new_env)
         else:
-          results.append(result_str)
+          return (results + [result_str], new_env)
 
-    return results, current_env.variables
+    # Use functional reduce to process all statements
+    final_results, final_env = reduce(
+      execute_and_accumulate,
+      statement_groups,
+      ([], self.environment)
+    )
+
+    return final_results, final_env.variables
 
   def get_environment_snapshot(self) -> Dict[str, Any]:
     """Get a snapshot of the current environment state"""

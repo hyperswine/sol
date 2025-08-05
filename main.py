@@ -168,13 +168,21 @@ def show_function_help() -> None:
       "Conversion": ['to_number', 'to_string'],
   }
 
-  for category, functions in categories.items():
-    print(f"\n{category}:")
+  # Functional approach using map and comprehensions
+  def format_category(category_data):
+    """Format a single category and its functions"""
+    category, functions = category_data
     available_funcs = [f for f in functions if f in FUNCTION_MAP]
     if available_funcs:
-      print(f"  {', '.join(available_funcs)}")
+      return f"\n{category}:\n  {', '.join(available_funcs)}"
     else:
-      print("  (none available)")
+      return f"\n{category}:\n  (none available)"
+
+  # Generate all category output functionally
+  category_outputs = [format_category(item) for item in categories.items()]
+
+  # Print all categories
+  print(''.join(category_outputs))
 
   print(f"\nTotal: {len(FUNCTION_MAP)} functions available")
   print("\nUse --debug for detailed execution information")
