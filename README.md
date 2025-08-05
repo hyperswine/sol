@@ -448,20 +448,20 @@ Sol supports rich data structures with literal syntax:
 ### Script Execution
 
 ```bash
-python main.py script.sol
+uv run python main.py script.sol
 ```
 
 ### Interactive Mode
 
 ```bash
-python main.py
+uv run python main.py
 ```
 
 ### Debug Mode
 
 ```bash
-python main.py --debug script.sol  # For script files
-python main.py --debug             # For interactive mode
+uv run python main.py --debug script.sol  # For script files
+uv run python main.py --debug             # For interactive mode
 ```
 
 ## EXAMPLES
