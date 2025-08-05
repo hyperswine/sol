@@ -19,3 +19,16 @@ Including compose, partial applications, and so on
 I also want to modify the existing function implementations of the std library to use builtin python libs like gitpython and socket for ping. And python-nmap for nmap
 
 * the new stub source files have been created
+
+NEW: I want to use expression esque syntax. So no
+
+if x:
+  return x
+return y
+
+always
+
+if x:
+  return x
+else:
+  return y
