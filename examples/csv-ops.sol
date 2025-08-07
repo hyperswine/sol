@@ -15,3 +15,11 @@ csv' = csvread file.
 set csv' "1|1" 1.
 
 echo csv'.
+
+exampledir = "example_dir/".
+customers100 = + exampledir "customers-100.csv".
+
+# customers = "example_dir/customers-100.csv".
+
+csv' = csvread customers100.
+echo csv'.
