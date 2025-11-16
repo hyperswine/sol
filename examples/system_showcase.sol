@@ -30,7 +30,7 @@ echo "Home directory:".
 echo home.
 
 # Set custom environment variable
-result = setenv "SOL_DEMO" "Working!".
+setenv "SOL_DEMO" "Working!".
 demo_val = getenv "SOL_DEMO".
 echo "Custom env var:".
 echo demo_val.
