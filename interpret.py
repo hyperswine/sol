@@ -101,6 +101,10 @@ def process_variable_reference(name: str, env: Environment) -> Any:
   if value is not None:
     return value
 
+  # Check if it's a built-in function (including operators)
+  if name in FUNCTION_MAP:
+    return FUNCTION_MAP[name]
+
   # Try to parse as number if not found as variable (cached)
   parsed_num = _parse_number(name)
   if parsed_num is not None:
@@ -127,6 +131,9 @@ def process_array_elements(elements: List[Any], env: Environment) -> List[Any]:
         return process_access_expression(element[1], env)
       elif element[0] == "PIPELINE":
         result, _ = process_pipeline(element[1], env)
+        return result
+      elif element[0] == "IF_EXPR":
+        result, _ = process_if_expression(element[1], env)
         return result
       else:
         return element[1]  # Other tuple types
@@ -178,6 +185,8 @@ def process_pipeline(pipeline_parts: List[Any], env: Environment) -> Tuple[Any, 
         current_value = process_access_expression(initial_value[1], env)
       elif initial_value[0] == "PARENTHESIZED":
         current_value, _ = execute_function_call(list(initial_value[1]), env)
+      elif initial_value[0] == "IF_EXPR":
+        current_value, _ = process_if_expression(initial_value[1], env)
       else:
         current_value = initial_value[1]
     elif isinstance(initial_value, str):
@@ -208,6 +217,95 @@ def process_pipeline(pipeline_parts: List[Any], env: Environment) -> Tuple[Any, 
     current_value, env = execute_function_call(augmented_call, env)
 
   return current_value, env
+
+
+def process_if_expression(if_parts: List[Any], env: Environment) -> Tuple[Any, Environment]:
+  """
+  Process if expression: if condition then true_expr else false_expr
+
+  Args:
+    if_parts: [condition, then_branch, else_branch]
+    env: Current environment
+
+  Returns:
+    Tuple of (result, environment)
+  """
+  if len(if_parts) != 3:
+    return ("Error: If expression must have condition, then branch, and else branch", env)
+
+  condition, then_branch, else_branch = if_parts
+
+  # Evaluate condition
+  condition_result = evaluate_expression(condition, env)
+
+  # Determine truthiness
+  is_true = is_truthy(condition_result)
+
+  # Evaluate appropriate branch
+  if is_true:
+    return evaluate_expression(then_branch, env), env
+  else:
+    return evaluate_expression(else_branch, env), env
+
+
+def is_truthy(value: Any) -> bool:
+  """
+  Determine if a value is truthy in Sol.
+  Following Python-like semantics:
+  - False, None, 0, 0.0, "", [], {} are falsy
+  - Everything else is truthy
+  """
+  if value is None or value is False:
+    return False
+  if isinstance(value, (int, float)) and value == 0:
+    return False
+  if isinstance(value, str) and value == "":
+    return False
+  if isinstance(value, (list, dict)) and len(value) == 0:
+    return False
+  return True
+
+
+def evaluate_expression(expr: Any, env: Environment) -> Any:
+  """
+  Evaluate any expression type and return its value.
+  Used by if expressions to evaluate conditions and branches.
+  """
+  if isinstance(expr, tuple) and len(expr) >= 2:
+    expr_type = expr[0]
+
+    if expr_type == "STRING_LITERAL":
+      return process_string_literal(expr)
+    elif expr_type == "FSTRING_LITERAL":
+      return process_fstring_literal(expr, env)
+    elif expr_type == "ARRAY_LITERAL":
+      return process_array_elements(expr[1], env)
+    elif expr_type == "DICT_LITERAL":
+      return process_dict_elements(expr[1], env)
+    elif expr_type == "ACCESS":
+      return process_access_expression(expr[1], env)
+    elif expr_type == "PIPELINE":
+      result, _ = process_pipeline(expr[1], env)
+      return result
+    elif expr_type == "IF_EXPR":
+      result, _ = process_if_expression(expr[1], env)
+      return result
+    elif expr_type == "PARENTHESIZED":
+      # Parenthesized expressions contain a function call
+      result, _ = execute_function_call(expr[1], env)
+      return result
+    else:
+      return expr[1]
+  elif isinstance(expr, str):
+    return process_variable_reference(expr, env)
+  elif isinstance(expr, (int, float, bool)):
+    return expr
+  elif isinstance(expr, list):
+    # If it's a list (function call), execute it
+    result, _ = execute_function_call(expr, env)
+    return result
+  else:
+    return expr
 
 
 def process_dict_elements(pairs: List[Tuple[Any, Any]], env: Environment) -> Dict[str, Any]:
@@ -242,6 +340,8 @@ def process_dict_elements(pairs: List[Tuple[Any, Any]], env: Environment) -> Dic
         processed_value = process_access_expression(value[1], env)
       elif value[0] == "PIPELINE":
         processed_value, _ = process_pipeline(value[1], env)
+      elif value[0] == "IF_EXPR":
+        processed_value, _ = process_if_expression(value[1], env)
       else:
         processed_value = value[1]
     elif isinstance(value, str):
@@ -410,14 +510,23 @@ def _process_argument(arg: Any, env: Environment) -> Any:
     elif arg[0] == "PIPELINE":
       result, _ = process_pipeline(arg[1], env)
       return result
+    elif arg[0] == "IF_EXPR":
+      result, _ = process_if_expression(arg[1], env)
+      return result
     else:
       return arg[1]
   elif isinstance(arg, str):
     return process_variable_reference(arg, env)
   elif isinstance(arg, list):
-    # It's a function call
-    result, _ = execute_function_call(arg, env)
-    return result
+    # Check if it's a function call (first element is a string identifier)
+    # vs a data list (elements are values)
+    if arg and isinstance(arg[0], str) and (arg[0] in FUNCTION_MAP or env.get_variable(arg[0]) is not None or env.get_function(arg[0]) is not None):
+      # It's a function call
+      result, _ = execute_function_call(arg, env)
+      return result
+    else:
+      # It's a data list, return as-is
+      return arg
   else:
     return arg
 
@@ -451,8 +560,16 @@ def _execute_builtin_function(func_name: str, func: Callable, processed_args: Li
   """Execute a built-in function"""
   try:
     # Special handling for comparison operators that return predicates
-    if func_name in ['>', '<', '=='] and len(processed_args) == 1:
-      return func(processed_args[0]), env
+    # In Sol: "> x 5" means "is x > 5?" but greater_than(threshold, value) checks "value > threshold"
+    # So we need to swap arguments: "> x 5" becomes greater_than(5, x)
+    if func_name in ['>', '<', '==']:
+      if len(processed_args) == 1:
+        return func(processed_args[0]), env
+      elif len(processed_args) == 2:
+        # Swap arguments: "> a b" means "is a > b?" -> greater_than(b, a)
+        return func(processed_args[1], processed_args[0]), env
+      else:
+        return func(*processed_args), env
 
     # Special handling for arithmetic operators
     elif func_name in ['+', '-', '*', '/']:
@@ -464,8 +581,66 @@ def _execute_builtin_function(func_name: str, func: Callable, processed_args: Li
         return func(*processed_args), env
 
     # Special handling for higher-order functions
-    elif func_name in ['map', 'filter', 'fold'] and len(processed_args) == 1:
-      return PartialFunction(func, (processed_args[0],)), env
+    # map and filter take 1 arg before the data: map func | filter predicate
+    elif func_name in ['map', 'filter']:
+      if len(processed_args) == 1:
+        return PartialFunction(func, (processed_args[0],)), env
+      elif len(processed_args) == 2:
+        # Could be:
+        # 1) map(func, array) - normal case
+        # 2) map(array, func) - from pipeline injecting array first
+        # Check if first arg is a list and second is callable
+        if isinstance(processed_args[0], list) and callable(processed_args[1]):
+          # Pipeline case: map(array, func) -> swap to map(func, array)
+          return func(processed_args[1], processed_args[0]), env
+        else:
+          # Normal case: map(func, array)
+          return func(*processed_args), env
+      else:
+        return func(*processed_args), env    # fold takes 2 args before the data: fold func initial
+    # When used as "fold + 0", we want to return a partial that waits for the array
+    # fold is curried as fold(func, iterable, initial), so we need to reorder
+    elif func_name == 'fold':
+      if len(processed_args) == 1:
+        # fold func -> waiting for (iterable, initial)
+        return PartialFunction(func, (processed_args[0],)), env
+      elif len(processed_args) == 2:
+        # Could be:
+        # 1) fold func initial -> waiting for iterable (normal case)
+        # 2) fold iterable func -> from pipeline, waiting for initial (edge case)
+        # Check if first arg is a list (iterable from pipeline)
+        if isinstance(processed_args[0], list):
+          # Pipeline case: fold(array, func) -> partial waiting for initial
+          iterable_arg = processed_args[0]
+          func_arg = processed_args[1]
+          partial_fold = lambda initial: func(func_arg, iterable_arg, initial)
+          return partial_fold, env
+        else:
+          # Normal case: fold(func, initial) -> partial waiting for iterable
+          func_arg = processed_args[0]
+          initial_arg = processed_args[1]
+          partial_fold = lambda iterable: func(func_arg, iterable, initial_arg)
+          return partial_fold, env
+      elif len(processed_args) == 3:
+        # Could be:
+        # 1) fold func initial iterable -> reorder to fold(func, iterable, initial)
+        # 2) fold iterable func initial -> from pipeline, reorder to fold(func, iterable, initial)
+        # Check if first arg is a list (iterable from pipeline)
+        if isinstance(processed_args[0], list):
+          # Pipeline case: fold(array, func, initial) -> fold_func(func, array, initial)
+          iterable_arg = processed_args[0]
+          func_arg = processed_args[1]
+          initial_arg = processed_args[2]
+          return func(func_arg, iterable_arg, initial_arg), env
+        else:
+          # Normal case: fold(func, initial, iterable) -> fold_func(func, iterable, initial)
+          func_arg = processed_args[0]
+          initial_arg = processed_args[1]
+          iterable_arg = processed_args[2]
+          return func(func_arg, iterable_arg, initial_arg), env
+      else:
+        # More than 3 args - error
+        return f"Error: fold expects at most 3 arguments (function, initial, iterable), got {len(processed_args)}", env
 
     else:
       return func(*processed_args), env
@@ -551,6 +726,9 @@ def _process_single_assignment_value(single_value: Any, env: Environment) -> Any
       return result
     elif single_value[0] == "PIPELINE":
       result, _ = process_pipeline(single_value[1], env)
+      return result
+    elif single_value[0] == "IF_EXPR":
+      result, _ = process_if_expression(single_value[1], env)
       return result
     else:
       return single_value[1]
