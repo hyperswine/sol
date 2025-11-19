@@ -1,26 +1,95 @@
 Sol is a modern, minimal, batteries-included scripting language designed for readability, quick startup, and powerful standard tooling. Built on Python's extensive ecosystem, Sol provides a highly expressive scripting experience with clean syntax.
 
-- **Syntax**: Statements end with periods (`.`) like natural language
-- **Prefix Function Calls**: `result = func arg1 arg2`
-- **Built-in Tools**: File operations, OS commands, all using Python's libraries
+## Key Features
+
+- **Functional Syntax**: Statements end with periods (`.`), prefix function calls like `func arg1 arg2`
+- **Pipeline Operator**: Chain operations with `|>` for readable data transformations
+- **F-String Interpolation**: Python-style variable interpolation in double-quoted strings
+- **Result Types**: Rust-inspired error handling without exceptions
+- **Shell Integration**: Execute commands with `sh` and handle results safely
+- **Built-in Tools**: File operations, networking, data processing, Git, and more
 - **Fast Startup**: Minimal runtime overhead
-- **No Dependencies**: Everything you need is built-in
+- **Interactive REPL**: History, tab completion, and multiline editing
 
-The implementation of Sol is a very functional (FP) and expression based version of python. Its pattern is more like haskell and SML rather than imperative script based.
+The implementation of Sol is very functional (FP) and expression-based, similar to Haskell and SML rather than imperative scripting languages.
 
+## Quick Examples
+
+### Basic Usage
 ```sol
 echo "Hello World".
 ```
 
+### F-String Interpolation
 ```sol
-current_dir = pwd.
-echo current_dir.
+name = "Sol".
+version = "1.0".
+echo "Welcome to {name} v{version}!".
 ```
 
+### Pipeline Operator
+```sol
+# Chain operations left-to-right
+getenv "HOME" |> unwrap_or "/tmp" |> echo.
+
+# Data processing pipelines
+[1, 2, 3, 4, 5] |> map (* 2) |> filter (> 5) |> echo.
+```
+
+### Result Types for Error Handling
+```sol
+# Shell command returns Result type
+result = sh "ls -la".
+succeeded result |> echo.
+
+# Safe environment variable access
+home = getenv "HOME" |> unwrap_or "/default/path".
+
+# Exit on error
+getenv "REQUIRED_VAR" |> unwrap_or_exit "Missing REQUIRED_VAR".
+```
+
+### File Operations
 ```sol
 mkdir "my_directory".
 write "test.txt" "Hello Sol!".
 content = read "test.txt".
+echo content.
+```
+
+## What's New in Sol 1.0
+
+### 🚀 Pipeline Operator (`|>`)
+Chain operations left-to-right for readable data transformations:
+```sol
+[1, 2, 3, 4, 5] |> map (* 2) |> filter (> 5) |> fold + 0 |> echo.
+getenv "HOME" |> unwrap_or "/tmp" |> echo.
+```
+
+### 📝 F-String Interpolation
+Python-style variable interpolation in double-quoted strings:
+```sol
+name = "Alice".
+age = 30.
+echo "Hello, {name}! You are {age} years old.".
+```
+
+### ✅ Result Types
+Rust-inspired error handling without exceptions:
+```sol
+# Safe environment variable access
+home = getenv "HOME" |> unwrap_or "/tmp".
+
+# Shell commands return Results
+result = sh "ls -la".
+output = result |> unwrap_or "Command failed".
+```
+
+### 🔧 Shell Integration
+Execute shell commands with proper error handling:
+```sol
+sh "git status" |> unwrap_or "Not a git repo" |> echo.
+succeeded (sh "make build") |> echo.
 ```
 
 ## BUILT-IN FUNCTIONS
@@ -232,9 +301,12 @@ Sol comes with a comprehensive standard library providing filesystem operations,
   - Returns: Computer's hostname as string
   - Example: `host = hostname.`
 
-- **`getenv var_name`** - Get environment variable
-  - Returns: Environment variable value or empty string
-  - Example: `home = getenv "HOME".`
+- **`getenv var_name`** - Get environment variable (returns Result)
+  - Returns: Result.Ok with value if variable exists, Result.Err if not found
+  - Use with `unwrap_or` for safe access with defaults
+  - Use with `unwrap_or_exit` for required variables
+  - Example: `home = getenv "HOME" |> unwrap_or "/tmp".`
+  - Example: `path = getenv "REQUIRED_PATH" |> unwrap_or_exit "Missing REQUIRED_PATH".`
 
 - **`setenv var_name value`** - Set environment variable
   - Sets environment variable for current process
@@ -417,6 +489,115 @@ Sol comes with a comprehensive standard library providing filesystem operations,
   - Returns: String representation of value
   - Example: `str_val = to_string 123.` (returns "123")
 
+### **Shell Integration**
+
+- **`sh command`** - Execute shell command with Result type
+  - Executes shell command and returns Result containing output
+  - Result has fields: `success`, `value` (stdout), `error` (stderr), `exit_code`
+  - Automatically handles command failures and errors
+  - Returns: Result type with command execution details
+  - Example: `result = sh "ls -la".`
+  - Example: `output = sh "grep pattern file.txt" |> unwrap_or "Not found".`
+
+### **Result Types (Error Handling)**
+
+Sol provides Rust-inspired Result types for safe error handling without exceptions:
+
+- **`ok value`** - Create successful Result
+  - Wraps a value in a successful Result
+  - Returns: Result with success=true, value=value, error=""
+  - Example: `result = ok "Success!".`
+
+- **`err message`** - Create error Result
+  - Creates a failed Result with error message
+  - Returns: Result with success=false, value=null, error=message
+  - Example: `result = err "File not found".`
+
+- **`unwrap_or result default`** - Get value or default
+  - Returns value if Result is successful, default otherwise
+  - Safe way to handle Results without exceptions
+  - Returns: Value from Result or default value
+  - Example: `value = unwrap_or (getenv "VAR") "default".`
+  - Example: `home = getenv "HOME" |> unwrap_or "/tmp".`
+
+- **`unwrap_or_exit result message`** - Get value or exit
+  - Returns value if successful, exits program with message if failed
+  - Use for critical operations that must succeed
+  - Returns: Value from Result or exits program
+  - Example: `path = getenv "REQUIRED_PATH" |> unwrap_or_exit "REQUIRED_PATH not set".`
+
+- **`failed result`** - Check if Result is failure
+  - Returns true if Result represents an error
+  - Returns: Boolean indicating failure status
+  - Example: `failed (sh "false") |> echo.` (returns true)
+
+- **`succeeded result`** - Check if Result is success
+  - Returns true if Result represents success
+  - Returns: Boolean indicating success status
+  - Example: `succeeded (sh "true") |> echo.` (returns true)
+
+**Functions that return Results:**
+- `getenv var_name` - Returns Result.Err if variable not found
+- `sh command` - Returns Result with command output/error details
+
+### **Pipeline Operator**
+
+The pipeline operator `|>` enables left-to-right function composition:
+
+**Syntax**: `value |> function1 |> function2 |> function3`
+
+**Features**:
+- Chains function calls in readable left-to-right order
+- Automatically passes previous result as last argument
+- Works with partial functions and predicates
+- Composes naturally with Result types
+
+**Examples**:
+```sol
+# Simple pipeline
+[1, 2, 3, 4, 5] |> map (* 2) |> filter (> 5) |> echo.
+
+# Environment variable with fallback
+getenv "HOME" |> unwrap_or "/tmp" |> echo.
+
+# Shell command pipeline
+sh "ls -la" |> unwrap_or "Error listing files" |> echo.
+
+# Data processing
+numbers |> map (+ 10) |> filter (> 15) |> fold + 0 |> echo.
+```
+
+### **F-String Interpolation**
+
+F-strings provide Python-style variable interpolation in double-quoted strings:
+
+**Syntax**: `"text {variable} more text {expression}"`
+
+**Features**:
+- Use double quotes `"` for f-strings (single quotes for regular strings)
+- Interpolate variables with `{var_name}`
+- Supports nested access: `{user|name}`, `{data|0|key}`
+- Any expression result can be interpolated
+
+**Examples**:
+```sol
+# Basic interpolation
+name = "Sol".
+echo "Hello, {name}!".
+
+# Multiple variables
+version = "1.0".
+echo "Welcome to {name} version {version}".
+
+# Nested data access
+user = {"name": "Alice", "age": 30}.
+echo "User {user|name} is {user|age} years old".
+
+# Pipeline results
+path = getenv "HOME" |> unwrap_or "/tmp".
+echo "Using path: {path}".
+```
+
 ### **Utilities**
 
 - **`echo text`** - Print text to stdout
@@ -507,6 +688,52 @@ jsonwrite config "my_project/config.json".
 project_config = jsonread "my_project/config.json".
 echo "Project configuration:".
 echo project_config.
+```
+
+### **New Features: Pipelines, F-Strings, and Result Types**
+
+```sol
+# F-String interpolation
+project = "Sol".
+version = "1.0".
+echo "Welcome to {project} v{version}!".
+
+# Pipeline operator for data transformations
+numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].
+numbers |> filter (> 5) |> map (* 2) |> fold + 0 |> echo.
+# Output: 90
+
+# Result types with environment variables
+home = getenv "HOME" |> unwrap_or "/tmp".
+echo "Home directory: {home}".
+
+# Required environment variable (exits if not found)
+config_path = getenv "CONFIG_PATH" |> unwrap_or_exit "CONFIG_PATH must be set".
+
+# Shell command execution with Result types
+result = sh "ls -la".
+status = succeeded result.
+echo "Command succeeded: {status}".
+
+# Safe shell command with fallback
+output = sh "which python3" |> unwrap_or "python3 not found".
+echo "Python location: {output}".
+
+# Complex pipeline with shell commands
+sh "find . -name '*.py'"
+  |> unwrap_or "No Python files found"
+  |> echo.
+
+# Combining f-strings, pipelines, and Results
+user = whoami.
+host = hostname.
+dir = getenv "PWD" |> unwrap_or ".".
+echo "Running as {user}@{host} in {dir}".
+
+# Data pipeline with f-string output
+data = [100, 200, 300, 400, 500].
+average = data |> fold + 0 |> / (len data).
+echo "Average value: {average}".
 ```
 
 ### **System Information and Monitoring**
