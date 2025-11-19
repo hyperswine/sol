@@ -235,6 +235,20 @@ def process_if_expression(if_parts: List[Any], env: Environment) -> Tuple[Any, E
 
   condition, then_branch, else_branch = if_parts
 
+  # Unwrap ParseResults/Groups from parser if needed
+  # The parser groups then/else branches to keep multi-token expressions together
+  if hasattr(then_branch, 'asList'):
+    then_branch = then_branch.asList()
+    # If the group contains a single element, unwrap it
+    if len(then_branch) == 1 and not isinstance(then_branch[0], str):
+      then_branch = then_branch[0]
+
+  if hasattr(else_branch, 'asList'):
+    else_branch = else_branch.asList()
+    # If the group contains a single element, unwrap it
+    if len(else_branch) == 1 and not isinstance(else_branch[0], str):
+      else_branch = else_branch[0]
+
   # Evaluate condition
   condition_result = evaluate_expression(condition, env)
 
@@ -560,14 +574,16 @@ def _execute_builtin_function(func_name: str, func: Callable, processed_args: Li
   """Execute a built-in function"""
   try:
     # Special handling for comparison operators that return predicates
-    # In Sol: "> x 5" means "is x > 5?" but greater_than(threshold, value) checks "value > threshold"
-    # So we need to swap arguments: "> x 5" becomes greater_than(5, x)
+    # In Sol: "> threshold value" means "is value > threshold?"
+    # greater_than(threshold, value) returns "value > threshold"
+    # So "> a b" maps directly to greater_than(a, b)
+    # Example: "> 3 5" means "is 5 > 3?" → greater_than(3, 5) → 5 > 3 = True
     if func_name in ['>', '<', '==']:
       if len(processed_args) == 1:
         return func(processed_args[0]), env
       elif len(processed_args) == 2:
-        # Swap arguments: "> a b" means "is a > b?" -> greater_than(b, a)
-        return func(processed_args[1], processed_args[0]), env
+        # Direct mapping: "> a b" -> greater_than(a, b)
+        return func(processed_args[0], processed_args[1]), env
       else:
         return func(*processed_args), env
 
