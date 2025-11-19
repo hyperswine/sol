@@ -95,10 +95,9 @@ ARCH
 
 REPL or RUN ONCE mode
 
-proper Result and match. Can literally just get away with Result type
-match looks like
+proper Result TYPE.
+no match.
 
-x ? y : z.
+ALSO function defs arent working in REPL mode. Issue with the new environment
 
-means if x is an Ok x, then unwrap x and execute y
-if x is not Ok then x doesnt unwrap and you dont use it
+can only use unwrap_or_else
