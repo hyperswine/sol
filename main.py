@@ -5,13 +5,146 @@ Main entry point using functional composition
 
 import sys
 import argparse
+import atexit
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
 # Import our modular components
 from parsing import create_parser, create_debug_parser
 from interpret import create_interpreter, create_debug_interpreter, parse_and_interpret
 from stdlib import FUNCTION_MAP
+
+
+# REPL Enhancement: Setup readline for history and completion
+def setup_repl_enhancements() -> Optional[Any]:
+  """Setup readline for history, completion, and line editing"""
+  try:
+    import readline
+
+    # History file setup
+    history_file = Path.home() / ".sol_history"
+    history_size = 1000
+
+    # Load existing history
+    if history_file.exists():
+      try:
+        readline.read_history_file(str(history_file))
+      except Exception:
+        pass  # Ignore errors reading history
+
+    # Set history size
+    readline.set_history_length(history_size)
+
+    # Save history on exit
+    def save_history():
+      try:
+        readline.write_history_file(str(history_file))
+      except Exception:
+        pass  # Ignore errors writing history
+
+    atexit.register(save_history)
+
+    # Setup tab completion
+    setup_tab_completion(readline)
+
+    # Enable vi or emacs mode (defaults to emacs)
+    readline.parse_and_bind('tab: complete')
+
+    # Additional key bindings for better UX
+    readline.parse_and_bind('set editing-mode emacs')
+    readline.parse_and_bind('set show-all-if-ambiguous on')
+    readline.parse_and_bind('set completion-ignore-case on')
+
+    return readline
+
+  except ImportError:
+    # readline not available (Windows without pyreadline)
+    return None
+
+
+def setup_tab_completion(readline) -> None:
+  """Setup intelligent tab completion for Sol REPL"""
+
+  class SolCompleter:
+    """Custom completer for Sol language"""
+
+    def __init__(self):
+      # Build completion vocabulary
+      self.keywords = ['exit']
+      self.operators = ['=', '+', '-', '*', '/', '>', '<', '==', '|']
+      self.functions = list(FUNCTION_MAP.keys())
+
+      # Common variable names
+      self.common_vars = ['x', 'y', 'z', 'result', 'data', 'value', 'list', 'dict']
+
+      # All possible completions
+      self.completions = (
+        self.keywords +
+        self.functions +
+        self.common_vars +
+        self.operators
+      )
+
+    def complete(self, text: str, state: int) -> Optional[str]:
+      """Return the next completion for text"""
+      if state == 0:
+        # First call for this text, build matches
+        if text:
+          self.matches = [
+            comp for comp in self.completions
+            if comp.startswith(text)
+          ]
+        else:
+          self.matches = self.completions[:]
+
+      try:
+        return self.matches[state]
+      except IndexError:
+        return None
+
+    def get_function_hints(self, func_name: str) -> str:
+      """Get hints for function usage"""
+      hints = {
+        'map': 'map function array - Apply function to each element',
+        'filter': 'filter predicate array - Filter elements by predicate',
+        'fold': 'fold function initial array - Reduce array with function',
+        'ls': 'ls [path] - List directory contents',
+        'read': 'read filepath - Read file contents',
+        'write': 'write filepath content - Write content to file',
+        'get': 'get url - HTTP GET request',
+        'jsonparse': 'jsonparse json_string - Parse JSON string',
+      }
+      return hints.get(func_name, '')
+
+  # Set the completer
+  completer = SolCompleter()
+  readline.set_completer(completer.complete)
+
+  # Set completion delimiters
+  readline.set_completer_delims(' \t\n=()[]{}|')
+
+
+def print_repl_welcome(debug: bool = False) -> None:
+  """Print enhanced REPL welcome message"""
+  print("Sol v0.2.0 - Interactive REPL")
+  print("=" * 50)
+  print("Commands:")
+  print("  exit.          - Exit the REPL")
+  print("  help.          - Show available functions")
+  print("  vars.          - Show defined variables")
+  print("  clear.         - Clear screen")
+  print()
+  print(f"Features:")
+  print(f"  • {len(FUNCTION_MAP)} built-in functions")
+  print(f"  • Tab completion enabled")
+  print(f"  • Command history (~/.sol_history)")
+  print(f"  • Multi-line support (end with .)")
+
+  if debug:
+    print("  • Debug mode ON")
+
+  print("=" * 50)
+  print()
 
 
 def create_arg_parser() -> argparse.ArgumentParser:
@@ -99,30 +232,96 @@ def run_script_file(script_path: str, debug: bool = False) -> None:
 
 
 def run_interactive_mode(debug: bool = False) -> None:
-  """Run Sol in interactive mode using functional composition"""
-  print("Sol v0.2.0 (Refactored) - Interactive Mode")
-  print("Type 'exit.' to quit")
-  print(f"Available functions: {len(FUNCTION_MAP)} built-in functions")
-  if debug:
-    print("Debug mode enabled")
-  print()
+  """Run Sol in interactive mode with enhanced REPL features"""
+
+  # Setup readline enhancements
+  readline_module = setup_repl_enhancements()
+
+  # Print welcome message
+  print_repl_welcome(debug)
 
   # Create parser and interpreter
   parser = create_debug_parser() if debug else create_parser()
   interpreter = create_debug_interpreter() if debug else create_interpreter()
 
+  # Multi-line input buffer
+  input_buffer = []
+
   while True:
     try:
-      code = input("sol> ")
+      # Determine prompt based on buffer state
+      prompt = "sol> " if not input_buffer else "...  "
 
+      code = input(prompt)
+
+      # Handle special REPL commands
       if code.strip() == "exit.":
+        print("Goodbye!")
         break
+
+      elif code.strip() == "help.":
+        show_function_help()
+        continue
+
+      elif code.strip() == "vars.":
+        env_snapshot = interpreter.get_environment_snapshot()
+        if env_snapshot['variables']:
+          print("Defined variables:")
+          for var, value in env_snapshot['variables'].items():
+            value_str = str(value)
+            if len(value_str) > 50:
+              value_str = value_str[:47] + "..."
+            print(f"  {var} = {value_str}")
+        else:
+          print("No variables defined yet")
+
+        if env_snapshot['user_functions']:
+          print("\nUser-defined functions:")
+          for func_name, func_def in env_snapshot['user_functions'].items():
+            params = ', '.join(func_def['params'])
+            print(f"  {func_name}({params})")
+        continue
+
+      elif code.strip() == "clear.":
+        # Clear screen
+        import os
+        os.system('clear' if os.name != 'nt' else 'cls')
+        print_repl_welcome(debug)
+        continue
+
+      elif code.strip() == "cache.":
+        # Show cache statistics
+        from interpret import get_cache_info
+        cache_info = get_cache_info()
+        print("Cache statistics:")
+        for cache_name, stats in cache_info.items():
+          print(f"  {cache_name}:")
+          print(f"    Hits: {stats['hits']}")
+          print(f"    Misses: {stats['misses']}")
+          print(f"    Size: {stats['currsize']}/{stats['maxsize']}")
+          if stats['hits'] + stats['misses'] > 0:
+            hit_rate = stats['hits'] / (stats['hits'] + stats['misses']) * 100
+            print(f"    Hit rate: {hit_rate:.1f}%")
+        continue
 
       if not code.strip():
         continue
 
+      # Handle multi-line input (statements not ending with .)
+      if code.strip() and not code.strip().endswith('.'):
+        input_buffer.append(code)
+        continue
+
+      # Combine buffer with current line
+      if input_buffer:
+        input_buffer.append(code)
+        full_code = ' '.join(input_buffer)
+        input_buffer = []
+      else:
+        full_code = code
+
       # Parse and execute using functional composition
-      parsed = parser.parse(code)
+      parsed = parser.parse(full_code)
       if isinstance(parsed, str):
         print(parsed)
         continue
@@ -131,13 +330,13 @@ def run_interactive_mode(debug: bool = False) -> None:
 
       # Results are already printed during execution when print_immediately=True
       # Only need to handle the case where results is a parse error string
-      # Parse error (shouldn't happen with print_immediately=True)
       if isinstance(results, str):
         print(results)
 
     except KeyboardInterrupt:
-      print("\nGoodbye!")
-      break
+      print("\nUse 'exit.' to quit or Ctrl+D")
+      input_buffer = []  # Clear buffer on interrupt
+      continue
     except EOFError:
       print("\nGoodbye!")
       break
@@ -147,6 +346,7 @@ def run_interactive_mode(debug: bool = False) -> None:
         import traceback
         traceback.print_exc()
       print("  Hint: If this keeps happening, try restarting or use --debug for more details")
+      input_buffer = []  # Clear buffer on error
 
 
 def show_function_help() -> None:

@@ -455,9 +455,31 @@ uv run python main.py script.sol
 
 ### Interactive Mode
 
+The Sol REPL provides a modern interactive development environment with powerful features:
+
 ```bash
-uv run python main.py
+uv run python main.py              # Start interactive REPL
+uv run python main.py -i           # Alternative syntax
+uv run python main.py -i --debug   # REPL with debug mode
 ```
+
+**Enhanced REPL Features:**
+- **Command History** - Persistent history across sessions (`~/.sol_history`)
+- **Tab Completion** - Auto-complete functions, keywords, and variables
+- **Special Commands** - `vars.`, `help.`, `cache.`, `clear.`, `exit.`
+- **Multi-line Input** - Continue statements across multiple lines
+- **Keyboard Shortcuts** - Full readline support with Emacs/Vi modes
+
+**REPL Commands:**
+```bash
+sol> help.          # Show all available functions
+sol> vars.          # Show defined variables and functions
+sol> cache.         # Show cache performance statistics
+sol> clear.         # Clear screen
+sol> exit.          # Exit REPL (or Ctrl+D)
+```
+
+See [REPL_FEATURES.md](REPL_FEATURES.md) for detailed documentation and [REPL_QUICKREF.md](REPL_QUICKREF.md) for a quick reference guide.
 
 ### Debug Mode
 
