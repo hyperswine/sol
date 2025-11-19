@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Sol Scripting Language"
 license = { file = "LICENSE" }
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13, <3.14"
 dependencies = [
     "beautifulsoup4>=4.13.4",
     "gitpython>=3.1.44",
