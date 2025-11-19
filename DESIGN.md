@@ -91,8 +91,6 @@ WANT LATER
 
 ------------------
 
-NEW STUFF
-
 ARCH
 
 REPL or RUN ONCE mode
@@ -132,3 +130,17 @@ push_service service =
 services |> map build_service.
 services |> map push_service.
 ```
+
+-----------
+
+NEW STUFF WANTED
+
+if exprs. Will look like
+
+if x then y else z
+
+can be used anywhere like
+
+x = 1.
+if x == 1 then echo "hi" else echo "bye".
+y = if x == 1 then (x |> + 2) else (+ x 4).
