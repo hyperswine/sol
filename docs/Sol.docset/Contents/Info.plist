@@ -15,7 +15,7 @@
     <key>isDashDocset</key>
     <true/>
     <key>isJavaScriptEnabled</key>
-    <true/>
+    <false/>
     <key>DashDocSetDefaultFTSEnabled</key>
     <true/>
     <key>DashDocSetFallbackURL</key>

@@ -1,10 +1,11 @@
-#!/usr/bin/env python3
 """
-Sol Dash Docset Generator
+Sol Dash Docset Generator - IMPROVED VERSION
 
-This script generates a Dash docset from the Sol documentation.
-It reads the main README.md and creates a properly formatted HTML documentation
-with search index for use with Dash or Zeal.
+Fixes:
+1. Clean anchor IDs for proper navigation
+2. Black and white minimal styling
+3. Proper search index with correct anchors
+4. Updated content with new features
 """
 
 import os
@@ -12,18 +13,52 @@ import sqlite3
 import re
 from pathlib import Path
 
+def make_id(text):
+    """Create clean anchor IDs from text"""
+    # Remove markdown formatting
+    text = re.sub(r'[*`#]', '', text)
+    # Convert to lowercase
+    text = text.lower().strip()
+    # Remove special characters except spaces and hyphens
+    text = re.sub(r'[^\w\s-]', '', text)
+    # Replace whitespace with hyphens
+    text = re.sub(r'\s+', '-', text)
+    # Remove leading/trailing hyphens
+    text = text.strip('-')
+    return text
+
 def generate_html_from_readme(readme_path, output_path):
-    """Generate HTML documentation from README.md"""
+    """Generate HTML documentation from README.md with proper IDs"""
 
     with open(readme_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Process markdown-like syntax
+    # Track section IDs for navigation
+    section_ids = {}
 
-    # Headers
-    content = re.sub(r'^# (.+)$', r'<h1>\1</h1>', content, flags=re.MULTILINE)
-    content = re.sub(r'^## (.+)$', r'<h2 id="\1">\1</h2>', content, flags=re.MULTILINE)
-    content = re.sub(r'^### (.+)$', r'<h3 id="\1">\1</h3>', content, flags=re.MULTILINE)
+    # Process headers with clean IDs
+    def replace_h1(match):
+        text = match.group(1)
+        id_val = make_id(text)
+        section_ids['h1'] = id_val
+        return f'<h1 id="{id_val}">{text}</h1>'
+
+    def replace_h2(match):
+        text = match.group(1)
+        id_val = make_id(text)
+        section_ids[text] = id_val
+        return f'<h2 id="{id_val}">{text}</h2>'
+
+    def replace_h3(match):
+        text = match.group(1)
+        id_val = make_id(text)
+        section_ids[text] = id_val
+        return f'<h3 id="{id_val}">{text}</h3>'
+
+    # Apply header transformations
+    content = re.sub(r'^# (.+)$', replace_h1, content, flags=re.MULTILINE)
+    content = re.sub(r'^## (.+)$', replace_h2, content, flags=re.MULTILINE)
+    content = re.sub(r'^### (.+)$', replace_h3, content, flags=re.MULTILINE)
 
     # Code blocks
     content = re.sub(r'```(\w+)?\n(.*?)\n```', r'<pre><code class="\1">\2</code></pre>', content, flags=re.DOTALL)
@@ -34,49 +69,40 @@ def generate_html_from_readme(readme_path, output_path):
     # Bold text
     content = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', content)
 
-    # Process lists properly
+    # Process lists
     lines = content.split('\n')
     processed_lines = []
     in_list = False
 
     for line in lines:
-        line = line.strip()
-        if not line:
+        stripped = line.strip()
+        if not stripped:
             if in_list:
                 processed_lines.append('</ul>')
                 in_list = False
             processed_lines.append('')
-            continue;
+            continue
 
-        if line.startswith('- '):
+        if stripped.startswith('- '):
             if not in_list:
                 processed_lines.append('<ul>')
                 in_list = True
-            processed_lines.append(f'<li>{line[2:]}</li>')
+            processed_lines.append(f'<li>{stripped[2:]}</li>')
         else:
             if in_list:
                 processed_lines.append('</ul>')
                 in_list = False
-            if line and not line.startswith('<'):
-                processed_lines.append(f'<p>{line}</p>')
+            if stripped and not stripped.startswith('<'):
+                processed_lines.append(f'<p>{stripped}</p>')
             else:
-                processed_lines.append(line)
+                processed_lines.append(stripped)
 
     if in_list:
         processed_lines.append('</ul>')
 
     content = '\n'.join(processed_lines)
 
-    # Clean up empty paragraphs and fix nesting
-    content = re.sub(r'<p></p>', '', content)
-    content = re.sub(r'<p>(<h[1-6])', r'\1', content)
-    content = re.sub(r'(</h[1-6]>)</p>', r'\1', content)
-    content = re.sub(r'<p>(<pre>)', r'\1', content)
-    content = re.sub(r'(</pre>)</p>', r'\1', content)
-    content = re.sub(r'<p>(<ul>)', r'\1', content)
-    content = re.sub(r'(</ul>)</p>', r'\1', content)
-
-    # Complete HTML template with sidebar
+    # Build navigation with correct IDs
     html_template = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -90,32 +116,34 @@ def generate_html_from_readme(readme_path, output_path):
         <nav class="sidebar">
             <h3>Sol Documentation</h3>
             <ul>
-                <li><a href="#COMPLETED">Status</a></li>
-                <li><a href="#TODO">TODO</a></li>
-                <li><a href="#BUILT-IN FUNCTIONS">Functions</a>
+                <li><a href="#key-features">Features</a></li>
+                <li><a href="#quick-examples">Quick Start</a></li>
+                <li><a href="#whats-new-in-sol-10">What's New</a></li>
+                <li><a href="#built-in-functions">Functions</a>
                     <ul>
-                        <li><a href="#Filesystem Operations">Filesystem</a></li>
-                        <li><a href="#Git Operations">Git</a></li>
-                        <li><a href="#Arithmetic Operations">Arithmetic</a></li>
-                        <li><a href="#Comparison and Logic">Logic</a></li>
-                        <li><a href="#Higher-Order Functions">Higher-Order</a></li>
-                        <li><a href="#System Information">System</a></li>
-                        <li><a href="#Web and Network Operations">Network</a></li>
-                        <li><a href="#Compression and Archives">Archives</a></li>
-                        <li><a href="#Data Processing">Data</a></li>
-                        <li><a href="#Type Conversion">Types</a></li>
-                        <li><a href="#Utilities">Utilities</a></li>
+                        <li><a href="#filesystem-operations">Filesystem</a></li>
+                        <li><a href="#git-operations">Git</a></li>
+                        <li><a href="#arithmetic-operations">Arithmetic</a></li>
+                        <li><a href="#comparison-and-logic">Logic</a></li>
+                        <li><a href="#higher-order-functions">Higher-Order</a></li>
+                        <li><a href="#system-information">System</a></li>
+                        <li><a href="#web-and-network-operations">Network</a></li>
+                        <li><a href="#compression-and-archives">Archives</a></li>
+                        <li><a href="#data-processing">Data</a></li>
+                        <li><a href="#type-conversion">Types</a></li>
+                        <li><a href="#utilities">Utilities</a></li>
+                        <li><a href="#result-type-operations">Results</a></li>
+                        <li><a href="#shell-operations">Shell</a></li>
                     </ul>
                 </li>
-                <li><a href="#USAGE">Usage</a></li>
-                <li><a href="#EXAMPLES">Examples</a></li>
-                <li><a href="#IMPLEMENTATION">Implementation</a></li>
-                <li><a href="#PROJECT STRUCTURE">Structure</a></li>
-                <li><a href="#LANGUAGE PHILOSOPHY">Philosophy</a></li>
+                <li><a href="#usage">Usage</a></li>
+                <li><a href="#examples">Examples</a></li>
+                <li><a href="#implementation">Implementation</a></li>
+                <li><a href="#project-structure">Structure</a></li>
+                <li><a href="#language-philosophy">Philosophy</a></li>
             </ul>
         </nav>
         <main class="content">
-            <h1>Sol Programming Language</h1>
             {content}
         </main>
     </div>
@@ -126,39 +154,41 @@ def generate_html_from_readme(readme_path, output_path):
         f.write(html_template)
 
     print(f"✅ HTML documentation generated: {output_path}")
+    return section_ids
 
 def create_css_file(output_path):
-    """Create CSS file for the documentation"""
-    css_content = """/* Sol Documentation Styles */
+    """Create minimal black and white CSS"""
+    css_content = """/* Sol Documentation - Minimal Black & White Theme */
+
 * {
     box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
 html, body {
-    overflow-x: hidden;
     width: 100%;
-    margin: 0;
-    padding: 0;
     height: 100%;
+    overflow-x: hidden;
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 15px;
     line-height: 1.6;
-    color: #333;
+    color: #000;
     background-color: #fff;
 }
 
 .layout {
     display: flex;
     min-height: 100vh;
-    width: 100%;
 }
 
 .sidebar {
     width: 250px;
-    background-color: #f6f8fa;
-    border-right: 1px solid #e1e4e8;
+    background-color: #fafafa;
+    border-right: 1px solid #ddd;
     padding: 20px;
     position: fixed;
     height: 100vh;
@@ -168,21 +198,23 @@ body {
 }
 
 .sidebar h3 {
-    margin-top: 0;
-    color: #0366d6;
-    border-bottom: 1px solid #e1e4e8;
+    margin: 0 0 16px 0;
     padding-bottom: 8px;
+    font-size: 18px;
+    font-weight: 600;
+    border-bottom: 2px solid #000;
 }
 
 .sidebar ul {
     list-style: none;
-    padding-left: 0;
     margin: 0;
+    padding: 0;
 }
 
 .sidebar ul ul {
     padding-left: 16px;
     margin-top: 4px;
+    margin-bottom: 8px;
 }
 
 .sidebar li {
@@ -190,98 +222,101 @@ body {
 }
 
 .sidebar a {
-    color: #0366d6;
+    color: #000;
     text-decoration: none;
     font-size: 14px;
     display: block;
-    padding: 2px 0;
+    padding: 4px 0;
+    border-bottom: 1px solid transparent;
 }
 
 .sidebar a:hover {
-    text-decoration: underline;
+    border-bottom: 1px solid #000;
 }
 
 .content {
     margin-left: 250px;
-    padding: 20px 40px;
+    padding: 40px 60px;
     width: calc(100% - 250px);
-    max-width: none;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
+    max-width: 900px;
 }
 
 h1 {
-    color: #007acc;
-    border-bottom: 2px solid #007acc;
-    padding-bottom: 10px;
-    margin-top: 0;
+    font-size: 32px;
+    font-weight: 700;
+    margin: 0 0 24px 0;
+    padding-bottom: 12px;
+    border-bottom: 3px solid #000;
 }
 
 h2 {
-    color: #0366d6;
-    border-bottom: 1px solid #e1e4e8;
+    font-size: 24px;
+    font-weight: 600;
+    margin: 40px 0 16px 0;
     padding-bottom: 8px;
-    margin-top: 32px;
+    border-bottom: 2px solid #ddd;
 }
 
 h3 {
-    color: #24292e;
-    margin-top: 24px;
+    font-size: 19px;
+    font-weight: 600;
+    margin: 32px 0 12px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #eee;
+}
+
+h4 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 24px 0 12px 0;
+}
+
+p {
+    margin: 8px 0;
+    line-height: 1.7;
 }
 
 code {
-    background-color: #f6f8fa;
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
     border-radius: 3px;
-    font-size: 85%;
-    margin: 0;
-    padding: 0.2em 0.4em;
-    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+    padding: 2px 6px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Courier New', monospace;
+    font-size: 13px;
 }
 
 pre {
-    background-color: #f6f8fa;
-    border-radius: 6px;
-    font-size: 85%;
-    line-height: 1.45;
-    overflow-x: auto;
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
     padding: 16px;
-    max-width: 100%;
-    word-wrap: break-word;
+    margin: 16px 0;
+    overflow-x: auto;
+    line-height: 1.5;
 }
 
 pre code {
     background-color: transparent;
-    border: 0;
-    display: inline;
-    line-height: inherit;
-    margin: 0;
-    max-width: 100%;
-    overflow: visible;
+    border: none;
     padding: 0;
-    word-wrap: normal;
+    font-size: 13px;
 }
 
-ul {
-    padding-left: 20px;
+ul, ol {
+    margin: 12px 0;
+    padding-left: 24px;
 }
 
 li {
-    margin: 4px 0;
+    margin: 6px 0;
+    line-height: 1.6;
 }
 
 strong {
     font-weight: 600;
 }
 
-.code.sol {
-    color: #d73a49;
-}
-
-.code.bash {
-    color: #005cc5;
-}
-
-/* Responsive design */
+/* Responsive */
 @media (max-width: 768px) {
     .layout {
         flex-direction: column;
@@ -292,13 +327,25 @@ strong {
         width: 100%;
         height: auto;
         border-right: none;
-        border-bottom: 1px solid #e1e4e8;
+        border-bottom: 1px solid #ddd;
     }
 
     .content {
         margin-left: 0;
         width: 100%;
         padding: 20px;
+    }
+}
+
+/* Print */
+@media print {
+    .sidebar {
+        display: none;
+    }
+
+    .content {
+        margin-left: 0;
+        width: 100%;
     }
 }
 """
@@ -308,30 +355,8 @@ strong {
 
     print(f"✅ CSS file created: {output_path}")
 
-def extract_functions_from_readme(readme_path):
-    """Extract function information from README.md"""
-    with open(readme_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    functions = []
-
-    # Find all function definitions
-    function_pattern = r'- \*\*`([^`]+)`\*\* - ([^\n]+)'
-    matches = re.findall(function_pattern, content)
-
-    for func_name, description in matches:
-        # Clean up function name (remove parameter info for indexing)
-        clean_name = func_name.split()[0] if ' ' in func_name else func_name
-        functions.append({
-            'name': clean_name,
-            'full_signature': func_name,
-            'description': description
-        })
-
-    return functions
-
 def create_docset():
-    """Create the complete docset structure"""
+    """Create the complete docset with proper indexing"""
     script_dir = Path(__file__).parent
     docset_path = script_dir / "Sol.docset"
     readme_path = script_dir.parent / "README.md"
@@ -343,11 +368,11 @@ def create_docset():
 
     os.makedirs(documents_dir, exist_ok=True)
 
-    # Generate HTML documentation from README.md
+    # Generate HTML and CSS
     html_path = documents_dir / "index.html"
     css_path = documents_dir / "styles.css"
 
-    generate_html_from_readme(readme_path, html_path)
+    section_ids = generate_html_from_readme(readme_path, html_path)
     create_css_file(css_path)
 
     # Create Info.plist
@@ -368,7 +393,7 @@ def create_docset():
     <key>isDashDocset</key>
     <true/>
     <key>isJavaScriptEnabled</key>
-    <true/>
+    <false/>
     <key>DashDocSetDefaultFTSEnabled</key>
     <true/>
     <key>DashDocSetFallbackURL</key>
@@ -379,7 +404,7 @@ def create_docset():
     with open(contents_dir / "Info.plist", 'w') as f:
         f.write(info_plist_content)
 
-    # Create/update search index
+    # Create search index with correct anchors
     db_path = resources_dir / "docSet.dsidx"
     if db_path.exists():
         os.remove(db_path)
@@ -387,53 +412,67 @@ def create_docset():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    # Create table
     cursor.execute('CREATE TABLE searchIndex(id INTEGER PRIMARY KEY, name TEXT, type TEXT, path TEXT)')
+    cursor.execute('CREATE UNIQUE INDEX anchor ON searchIndex (name, type, path)')
 
-    # Add main entries
-    main_entries = [
-        ('Sol Programming Language', 'Guide', 'index.html'),
-        ('Overview', 'Section', 'index.html#overview'),
-        ('Installation & Usage', 'Section', 'index.html#installation'),
-        ('Built-in Functions', 'Section', 'index.html#functions'),
-        ('Data Structures', 'Section', 'index.html#data-structures'),
-        ('Examples', 'Section', 'index.html#examples'),
+    # Main guide entry
+    cursor.execute('INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES (?, ?, ?)',
+                  ('Sol Programming Language', 'Guide', 'index.html'))
+
+    # Major sections
+    sections = [
+        ('Key Features', 'Section', 'key-features'),
+        ('Quick Examples', 'Section', 'quick-examples'),
+        ('Pipeline Operator', 'Guide', 'pipeline-operator'),
+        ('F-String Interpolation', 'Guide', 'f-string-interpolation'),
+        ('Result Types', 'Guide', 'result-types'),
+        ('Shell Integration', 'Guide', 'shell-integration'),
+        ('Built-in Functions', 'Section', 'built-in-functions'),
+        ('Usage', 'Section', 'usage'),
+        ('Examples', 'Section', 'examples'),
+        ('Implementation', 'Section', 'implementation'),
+        ('Project Structure', 'Section', 'project-structure'),
+        ('Language Philosophy', 'Section', 'language-philosophy'),
     ]
 
-    for name, type_, path in main_entries:
-        cursor.execute('INSERT INTO searchIndex(name, type, path) VALUES (?, ?, ?)', (name, type_, path))
+    for name, type_, anchor in sections:
+        cursor.execute('INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES (?, ?, ?)',
+                      (name, type_, f'index.html#{anchor}'))
 
-    # Add function categories and functions
-    categories = [
-        ('Filesystem Operations', 'filesystem', ['ls', 'pwd', 'mkdir', 'rm', 'read', 'write', 'cp', 'mv', 'touch', 'chmod', 'find', 'du']),
-        ('Git Operations', 'git', ['git_status', 'git_add', 'git_commit', 'git_push', 'git_pull', 'git_fetch', 'gitupdate', 'gitpush', 'gitsync', 'git_log', 'git_branch']),
-        ('Arithmetic Operations', 'arithmetic', ['+', '-', '*', '/']),
-        ('Comparison and Logic', 'comparison', ['>', '<', '==']),
-        ('Higher-Order Functions', 'higher-order', ['map', 'filter', 'fold']),
-        ('System Information', 'system', ['whoami', 'hostname', 'getenv', 'setenv', 'listenv', 'platform', 'cpu_count', 'cpu_percent', 'memory', 'disk_usage', 'uptime', 'processes']),
-        ('Web and Network Operations', 'network', ['wget', 'get', 'post', 'ping', 'dns_lookup', 'whois', 'nmap', 'port_scan']),
-        ('Compression and Archives', 'compression', ['zip_create', 'zip_extract', 'tar_create', 'tar_extract', 'gzip_compress', 'gzip_decompress']),
-        ('Data Processing', 'data-processing', ['jsonread', 'jsonwrite', 'jsonparse', 'jsonstringify', 'csvread', 'csvwrite', 'csvparse', 'set']),
-        ('Type Conversion', 'type-conversion', ['to_number', 'to_string']),
-        ('Utilities', 'utilities', ['echo', 'md5', 'sha256']),
-    ]
+    # Function categories and individual functions
+    categories = {
+        'Filesystem Operations': ['ls', 'pwd', 'mkdir', 'rm', 'read', 'write', 'cp', 'mv', 'touch', 'chmod', 'find', 'du'],
+        'Git Operations': ['git_status', 'git_add', 'git_commit', 'git_push', 'git_pull', 'git_fetch', 'git_log', 'git_branch', 'gitupdate', 'gitpush', 'gitsync'],
+        'Arithmetic Operations': ['+', '-', '*', '/', '%', 'pow'],
+        'Comparison and Logic': ['>', '<', '>=', '<=', '==', '!=', 'and', 'or', 'not'],
+        'Higher-Order Functions': ['map', 'filter', 'fold', 'reduce'],
+        'System Information': ['whoami', 'hostname', 'getenv', 'setenv', 'listenv', 'platform', 'cpu_count', 'cpu_percent', 'memory', 'disk_usage', 'uptime', 'processes'],
+        'Web and Network Operations': ['wget', 'get', 'post', 'ping', 'dns_lookup', 'whois', 'port_scan'],
+        'Compression and Archives': ['zip_create', 'zip_extract', 'tar_create', 'tar_extract', 'gzip_compress', 'gzip_decompress'],
+        'Data Processing': ['jsonread', 'jsonwrite', 'jsonparse', 'jsonstringify', 'csvread', 'csvwrite', 'csvparse', 'set'],
+        'Type Conversion': ['to_number', 'to_string', 'to_list'],
+        'Utilities': ['echo', 'md5', 'sha256', 'sleep'],
+        'Result Type Operations': ['ok', 'err', 'is_ok', 'is_err', 'unwrap', 'unwrap_or', 'unwrap_or_else', 'unwrap_or_exit'],
+        'Shell Operations': ['sh', 'succeeded', 'failed'],
+    }
 
-    for category_name, category_id, functions in categories:
-        cursor.execute('INSERT INTO searchIndex(name, type, path) VALUES (?, ?, ?)',
-                      (category_name, 'Category', f'index.html#{category_id}'))
+    for category_name, functions in categories.items():
+        category_anchor = make_id(category_name)
+        cursor.execute('INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES (?, ?, ?)',
+                      (category_name, 'Category', f'index.html#{category_anchor}'))
 
         for func in functions:
-            cursor.execute('INSERT INTO searchIndex(name, type, path) VALUES (?, ?, ?)',
-                          (func, 'Function', f'index.html#{category_id}'))
+            cursor.execute('INSERT OR IGNORE INTO searchIndex(name, type, path) VALUES (?, ?, ?)',
+                          (func, 'Function', f'index.html#{category_anchor}'))
 
     conn.commit()
     conn.close()
 
-    print(f"Docset created successfully at {docset_path}")
-    print("To install:")
-    print("   - Dash (macOS): Copy Sol.docset to ~/Library/Application Support/Dash/DocSets/")
-    print("   - Zeal (Linux): Copy Sol.docset to ~/.local/share/Zeal/Zeal/docsets/")
-    print("   - Zeal (Windows): Copy Sol.docset to %APPDATA%\\Zeal\\Zeal\\docsets\\")
+    print(f"\n✅ Docset created successfully at {docset_path}")
+    print("\n📦 Installation:")
+    print("   Dash (macOS):  Copy Sol.docset to ~/Library/Application Support/Dash/DocSets/")
+    print("   Zeal (Linux):  Copy Sol.docset to ~/.local/share/Zeal/Zeal/docsets/")
+    print("   Zeal (Windows): Copy Sol.docset to %APPDATA%\\Zeal\\Zeal\\docsets\\")
 
 if __name__ == "__main__":
     create_docset()

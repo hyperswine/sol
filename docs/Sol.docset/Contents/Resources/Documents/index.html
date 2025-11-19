@@ -11,66 +11,117 @@
         <nav class="sidebar">
             <h3>Sol Documentation</h3>
             <ul>
-                <li><a href="#COMPLETED">Status</a></li>
-                <li><a href="#TODO">TODO</a></li>
-                <li><a href="#BUILT-IN FUNCTIONS">Functions</a>
+                <li><a href="#key-features">Features</a></li>
+                <li><a href="#quick-examples">Quick Start</a></li>
+                <li><a href="#whats-new-in-sol-10">What's New</a></li>
+                <li><a href="#built-in-functions">Functions</a>
                     <ul>
-                        <li><a href="#Filesystem Operations">Filesystem</a></li>
-                        <li><a href="#Git Operations">Git</a></li>
-                        <li><a href="#Arithmetic Operations">Arithmetic</a></li>
-                        <li><a href="#Comparison and Logic">Logic</a></li>
-                        <li><a href="#Higher-Order Functions">Higher-Order</a></li>
-                        <li><a href="#System Information">System</a></li>
-                        <li><a href="#Web and Network Operations">Network</a></li>
-                        <li><a href="#Compression and Archives">Archives</a></li>
-                        <li><a href="#Data Processing">Data</a></li>
-                        <li><a href="#Type Conversion">Types</a></li>
-                        <li><a href="#Utilities">Utilities</a></li>
+                        <li><a href="#filesystem-operations">Filesystem</a></li>
+                        <li><a href="#git-operations">Git</a></li>
+                        <li><a href="#arithmetic-operations">Arithmetic</a></li>
+                        <li><a href="#comparison-and-logic">Logic</a></li>
+                        <li><a href="#higher-order-functions">Higher-Order</a></li>
+                        <li><a href="#system-information">System</a></li>
+                        <li><a href="#web-and-network-operations">Network</a></li>
+                        <li><a href="#compression-and-archives">Archives</a></li>
+                        <li><a href="#data-processing">Data</a></li>
+                        <li><a href="#type-conversion">Types</a></li>
+                        <li><a href="#utilities">Utilities</a></li>
+                        <li><a href="#result-type-operations">Results</a></li>
+                        <li><a href="#shell-operations">Shell</a></li>
                     </ul>
                 </li>
-                <li><a href="#USAGE">Usage</a></li>
-                <li><a href="#EXAMPLES">Examples</a></li>
-                <li><a href="#IMPLEMENTATION">Implementation</a></li>
-                <li><a href="#PROJECT STRUCTURE">Structure</a></li>
-                <li><a href="#LANGUAGE PHILOSOPHY">Philosophy</a></li>
+                <li><a href="#usage">Usage</a></li>
+                <li><a href="#examples">Examples</a></li>
+                <li><a href="#implementation">Implementation</a></li>
+                <li><a href="#project-structure">Structure</a></li>
+                <li><a href="#language-philosophy">Philosophy</a></li>
             </ul>
         </nav>
         <main class="content">
-            <h1>Sol Programming Language</h1>
             <p>Sol is a modern, minimal, batteries-included scripting language designed for readability, quick startup, and powerful standard tooling. Built on Python's extensive ecosystem, Sol provides a highly expressive scripting experience with clean syntax.</p>
 
+<h2 id="key-features">Key Features</h2>
+
 <ul>
-<li><strong>Clean Syntax</strong>: Statements end with periods (<code>.</code>) like natural language</li>
-<li><strong>Prefix Function Calls</strong>: <code>result = func arg1 arg2</code></li>
-<li><strong>Built-in Standard Library</strong>: File operations, OS commands, all using Python's libraries</li>
+<li><strong>Functional Syntax</strong>: Statements end with periods (<code>.</code>), prefix function calls like <code>func arg1 arg2</code></li>
+<li><strong>Pipeline Operator</strong>: Chain operations with <code>|></code> for readable data transformations</li>
+<li><strong>F-String Interpolation</strong>: Python-style variable interpolation in double-quoted strings</li>
+<li><strong>Result Types</strong>: Rust-inspired error handling without exceptions</li>
+<li><strong>Shell Integration</strong>: Execute commands with <code>sh</code> and handle results safely</li>
+<li><strong>Built-in Tools</strong>: File operations, networking, data processing, Git, and more</li>
 <li><strong>Fast Startup</strong>: Minimal runtime overhead</li>
-<li><strong>No Dependencies</strong>: Everything you need is built-in</li>
+<li><strong>Interactive REPL</strong>: History, tab completion, and multiline editing</li>
 </ul>
 
+<p>The implementation of Sol is very functional (FP) and expression-based, similar to Haskell and SML rather than imperative scripting languages.</p>
+
+<h2 id="quick-examples">Quick Examples</h2>
+
+<h3 id="basic-usage">Basic Usage</h3>
 <pre><code class="sol">echo "Hello World".</code></pre>
 
-<pre><code class="sol">current_dir = pwd.
-<p>echo current_dir.</code></pre>
+<h3 id="f-string-interpolation">F-String Interpolation</h3>
+<pre><code class="sol">name = "Sol".
+<p>version = "1.0".</p>
+<p>echo "Welcome to {name} v{version}!".</code></pre></p>
 
+<h3 id="pipeline-operator">Pipeline Operator</h3>
+<pre><code class="sol"><h1 id="chain-operations-left-to-right">Chain operations left-to-right</h1>
+<p>getenv "HOME" |> unwrap_or "/tmp" |> echo.</p>
+
+<h1 id="data-processing-pipelines">Data processing pipelines</h1>
+<p>[1, 2, 3, 4, 5] |> map (* 2) |> filter (> 5) |> echo.</code></pre></p>
+
+<h3 id="result-types-for-error-handling">Result Types for Error Handling</h3>
+<pre><code class="sol"><h1 id="shell-command-returns-result-type">Shell command returns Result type</h1>
+<p>result = sh "ls -la".</p>
+<p>succeeded result |> echo.</p>
+
+<h1 id="safe-environment-variable-access">Safe environment variable access</h1>
+<p>home = getenv "HOME" |> unwrap_or "/default/path".</p>
+
+<h1 id="exit-on-error">Exit on error</h1>
+<p>getenv "REQUIRED_VAR" |> unwrap_or_exit "Missing REQUIRED_VAR".</code></pre></p>
+
+<h3 id="file-operations">File Operations</h3>
 <pre><code class="sol">mkdir "my_directory".
 <p>write "test.txt" "Hello Sol!".</p>
-<p>content = read "test.txt".</code></pre>
+<p>content = read "test.txt".</p>
+<p>echo content.</code></pre></p>
 
-<h2 id="COMPLETED">COMPLETED</h2>
+<h2 id="whats-new-in-sol-10">What's New in Sol 1.0</h2>
 
-<p>✅ Added git operations: <code>gitsync</code>, <code>gitpush</code>, <code>gitupdate</code>, and individual git commands (<code>git_status</code>, <code>git_add</code>, <code>git_commit</code>, <code>git_push</code>, <code>git_pull</code>, <code>git_fetch</code>, <code>git_log</code>, <code>git_branch</code>)</p>
-<p>✅ Added filesystem operations: <code>cp</code>, <code>mv</code>, and other useful filesystem functions (<code>touch</code>, <code>chmod</code>, <code>find</code>, <code>du</code>)</p>
-<p>✅ Enhanced <code>mkdir</code> to use <code>-p</code> behavior by default (already implemented)</p>
+<h3 id="pipeline-operator">🚀 Pipeline Operator (<code>|></code>)</h3>
+<p>Chain operations left-to-right for readable data transformations:</p>
+<pre><code class="sol">[1, 2, 3, 4, 5] |> map (* 2) |> filter (> 5) |> fold + 0 |> echo.
+<p>getenv "HOME" |> unwrap_or "/tmp" |> echo.</code></pre></p>
 
-<h2 id="TODO">TODO</h2>
+<h3 id="f-string-interpolation">📝 F-String Interpolation</h3>
+<p>Python-style variable interpolation in double-quoted strings:</p>
+<pre><code class="sol">name = "Alice".
+<p>age = 30.</p>
+<p>echo "Hello, {name}! You are {age} years old.".</code></pre></p>
 
-<p>Add more git operations like branch switching, merging, and repository initialization. Consider adding file watching capabilities and text processing utilities.</p>
+<h3 id="result-types">✅ Result Types</h3>
+<p>Rust-inspired error handling without exceptions:</p>
+<pre><code class="sol"><h1 id="safe-environment-variable-access">Safe environment variable access</h1>
+<p>home = getenv "HOME" |> unwrap_or "/tmp".</p>
 
-<h2 id="BUILT-IN FUNCTIONS">BUILT-IN FUNCTIONS</h2>
+<h1 id="shell-commands-return-results">Shell commands return Results</h1>
+<p>result = sh "ls -la".</p>
+<p>output = result |> unwrap_or "Command failed".</code></pre></p>
+
+<h3 id="shell-integration">🔧 Shell Integration</h3>
+<p>Execute shell commands with proper error handling:</p>
+<pre><code class="sol">sh "git status" |> unwrap_or "Not a git repo" |> echo.
+<p>succeeded (sh "make build") |> echo.</code></pre></p>
+
+<h2 id="built-in-functions">BUILT-IN FUNCTIONS</h2>
 
 <p>Sol comes with a comprehensive standard library providing filesystem operations, networking, data processing, system information, and more. All functions are implemented using Python's standard library for maximum compatibility and reliability.</p>
 
-<h3 id="<strong>Filesystem Operations</strong>"><strong>Filesystem Operations</strong></h3>
+<h3 id="filesystem-operations"><strong>Filesystem Operations</strong></h3>
 
 <ul>
 <li><strong><code>ls [path]</code></strong> - List directory contents</li>
@@ -161,7 +212,7 @@
 <li>Example: <code>size_info = du "project".</code></li>
 </ul>
 
-<h3 id="<strong>Git Operations</strong>"><strong>Git Operations</strong></h3>
+<h3 id="git-operations"><strong>Git Operations</strong></h3>
 
 <ul>
 <li><strong><code>git_status</code></strong> - Get git repository status</li>
@@ -241,7 +292,7 @@
 <li>Example: <code>branches = git_branch.</code></li>
 </ul>
 
-<h3 id="<strong>Arithmetic Operations</strong>"><strong>Arithmetic Operations</strong></h3>
+<h3 id="arithmetic-operations"><strong>Arithmetic Operations</strong></h3>
 
 <ul>
 <li><strong><code>+ value1 value2 [value3...]</code></strong> - Addition and concatenation</li>
@@ -274,7 +325,7 @@
 <li>Example: <code>result = / 100 4.</code> (returns 25)</li>
 </ul>
 
-<h3 id="<strong>Comparison and Logic</strong>"><strong>Comparison and Logic</strong></h3>
+<h3 id="comparison-and-logic"><strong>Comparison and Logic</strong></h3>
 
 <ul>
 <li><strong><code>> threshold</code></strong> - Greater than predicate</li>
@@ -297,7 +348,7 @@
 <li>Example: <code>matches = filter (== "target") strings.</code></li>
 </ul>
 
-<h3 id="<strong>Higher-Order Functions</strong>"><strong>Higher-Order Functions</strong></h3>
+<h3 id="higher-order-functions"><strong>Higher-Order Functions</strong></h3>
 
 <ul>
 <li><strong><code>map function array</code></strong> - Apply function to each element</li>
@@ -321,7 +372,19 @@
 <li>Example: <code>sum = fold + [1, 2, 3, 4].</code> (returns 10)</li>
 </ul>
 
-<h3 id="<strong>System Information</strong>"><strong>System Information</strong></h3>
+<ul>
+<li><strong><code>progress expression</code></strong> - Execute expression with progress indication</li>
+<li>Wraps any function call or value with visual progress feedback</li>
+<li>For network operations (wget, get): Shows real-time progress bar based on download size</li>
+<li>For file operations: Shows spinner during execution</li>
+<li>For simple computations: Shows quick 0-100% animation</li>
+<li>Returns the result of the wrapped expression</li>
+<li>Example: <code>content = progress (wget "https://example.com/file.txt").</code></li>
+<li>Example: <code>result = progress (+ 10 20).</code></li>
+<li>Example: <code>data = progress (read "large_file.txt").</code></li>
+</ul>
+
+<h3 id="system-information"><strong>System Information</strong></h3>
 
 <ul>
 <li><strong><code>whoami</code></strong> - Get current username</li>
@@ -336,9 +399,12 @@
 </ul>
 
 <ul>
-<li><strong><code>getenv var_name</code></strong> - Get environment variable</li>
-<li>Returns: Environment variable value or empty string</li>
-<li>Example: <code>home = getenv "HOME".</code></li>
+<li><strong><code>getenv var_name</code></strong> - Get environment variable (returns Result)</li>
+<li>Returns: Result.Ok with value if variable exists, Result.Err if not found</li>
+<li>Use with <code>unwrap_or</code> for safe access with defaults</li>
+<li>Use with <code>unwrap_or_exit</code> for required variables</li>
+<li>Example: <code>home = getenv "HOME" |> unwrap_or "/tmp".</code></li>
+<li>Example: <code>path = getenv "REQUIRED_PATH" |> unwrap_or_exit "Missing REQUIRED_PATH".</code></li>
 </ul>
 
 <ul>
@@ -399,7 +465,7 @@
 <li>Example: <code>proc_list = processes.</code></li>
 </ul>
 
-<h3 id="<strong>Web and Network Operations</strong>"><strong>Web and Network Operations</strong></h3>
+<h3 id="web-and-network-operations"><strong>Web and Network Operations</strong></h3>
 
 <ul>
 <li><strong><code>wget url</code></strong> - Download content from URL</li>
@@ -460,7 +526,7 @@
 <li>Example: <code>status = port_scan "github.com" 443.</code></li>
 </ul>
 
-<h3 id="<strong>Compression and Archives</strong>"><strong>Compression and Archives</strong></h3>
+<h3 id="compression-and-archives"><strong>Compression and Archives</strong></h3>
 
 <ul>
 <li><strong><code>zip_create archive.zip file1 file2 ...</code></strong> - Create ZIP archive</li>
@@ -506,7 +572,7 @@
 <li>Example: <code>gzip_decompress "compressed.gz" "restored.txt".</code></li>
 </ul>
 
-<h3 id="<strong>Data Processing</strong>"><strong>Data Processing</strong></h3>
+<h3 id="data-processing"><strong>Data Processing</strong></h3>
 
 <ul>
 <li><strong><code>jsonread filepath</code></strong> - Read and parse JSON file</li>
@@ -571,7 +637,7 @@
 <li>Example: <code>updated = set data "user|name" "NewName".</code></li>
 </ul>
 
-<h3 id="<strong>Type Conversion</strong>"><strong>Type Conversion</strong></h3>
+<h3 id="type-conversion"><strong>Type Conversion</strong></h3>
 
 <ul>
 <li><strong><code>to_number value</code></strong> - Convert value to number</li>
@@ -588,7 +654,132 @@
 <li>Example: <code>str_val = to_string 123.</code> (returns "123")</li>
 </ul>
 
-<h3 id="<strong>Utilities</strong>"><strong>Utilities</strong></h3>
+<h3 id="shell-integration"><strong>Shell Integration</strong></h3>
+
+<ul>
+<li><strong><code>sh command</code></strong> - Execute shell command with Result type</li>
+<li>Executes shell command and returns Result containing output</li>
+<li>Result has fields: <code>success</code>, <code>value</code> (stdout), <code>error</code> (stderr), <code>exit_code</code></li>
+<li>Automatically handles command failures and errors</li>
+<li>Returns: Result type with command execution details</li>
+<li>Example: <code>result = sh "ls -la".</code></li>
+<li>Example: <code>output = sh "grep pattern file.txt" |> unwrap_or "Not found".</code></li>
+</ul>
+
+<h3 id="result-types-error-handling"><strong>Result Types (Error Handling)</strong></h3>
+
+<p>Sol provides Rust-inspired Result types for safe error handling without exceptions:</p>
+
+<ul>
+<li><strong><code>ok value</code></strong> - Create successful Result</li>
+<li>Wraps a value in a successful Result</li>
+<li>Returns: Result with success=true, value=value, error=""</li>
+<li>Example: <code>result = ok "Success!".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>err message</code></strong> - Create error Result</li>
+<li>Creates a failed Result with error message</li>
+<li>Returns: Result with success=false, value=null, error=message</li>
+<li>Example: <code>result = err "File not found".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>unwrap_or result default</code></strong> - Get value or default</li>
+<li>Returns value if Result is successful, default otherwise</li>
+<li>Safe way to handle Results without exceptions</li>
+<li>Returns: Value from Result or default value</li>
+<li>Example: <code>value = unwrap_or (getenv "VAR") "default".</code></li>
+<li>Example: <code>home = getenv "HOME" |> unwrap_or "/tmp".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>unwrap_or_exit result message</code></strong> - Get value or exit</li>
+<li>Returns value if successful, exits program with message if failed</li>
+<li>Use for critical operations that must succeed</li>
+<li>Returns: Value from Result or exits program</li>
+<li>Example: <code>path = getenv "REQUIRED_PATH" |> unwrap_or_exit "REQUIRED_PATH not set".</code></li>
+</ul>
+
+<ul>
+<li><strong><code>failed result</code></strong> - Check if Result is failure</li>
+<li>Returns true if Result represents an error</li>
+<li>Returns: Boolean indicating failure status</li>
+<li>Example: <code>failed (sh "false") |> echo.</code> (returns true)</li>
+</ul>
+
+<ul>
+<li><strong><code>succeeded result</code></strong> - Check if Result is success</li>
+<li>Returns true if Result represents success</li>
+<li>Returns: Boolean indicating success status</li>
+<li>Example: <code>succeeded (sh "true") |> echo.</code> (returns true)</li>
+</ul>
+
+<strong>Functions that return Results:</strong>
+<ul>
+<li><code>getenv var_name</code> - Returns Result.Err if variable not found</li>
+<li><code>sh command</code> - Returns Result with command output/error details</li>
+</ul>
+
+<h3 id="pipeline-operator"><strong>Pipeline Operator</strong></h3>
+
+<p>The pipeline operator <code>|></code> enables left-to-right function composition:</p>
+
+<strong>Syntax</strong>: <code>value |> function1 |> function2 |> function3</code>
+
+<strong>Features</strong>:
+<ul>
+<li>Chains function calls in readable left-to-right order</li>
+<li>Automatically passes previous result as last argument</li>
+<li>Works with partial functions and predicates</li>
+<li>Composes naturally with Result types</li>
+</ul>
+
+<strong>Examples</strong>:
+<pre><code class="sol"><h1 id="simple-pipeline">Simple pipeline</h1>
+<p>[1, 2, 3, 4, 5] |> map (* 2) |> filter (> 5) |> echo.</p>
+
+<h1 id="environment-variable-with-fallback">Environment variable with fallback</h1>
+<p>getenv "HOME" |> unwrap_or "/tmp" |> echo.</p>
+
+<h1 id="shell-command-pipeline">Shell command pipeline</h1>
+<p>sh "ls -la" |> unwrap_or "Error listing files" |> echo.</p>
+
+<h1 id="data-processing">Data processing</h1>
+<p>numbers |> map (+ 10) |> filter (> 15) |> fold + 0 |> echo.</code></pre></p>
+
+<h3 id="f-string-interpolation"><strong>F-String Interpolation</strong></h3>
+
+<p>F-strings provide Python-style variable interpolation in double-quoted strings:</p>
+
+<strong>Syntax</strong>: <code>"text {variable} more text {expression}"</code>
+
+<strong>Features</strong>:
+<ul>
+<li>Use double quotes <code>"</code> for f-strings (single quotes for regular strings)</li>
+<li>Interpolate variables with <code>{var_name}</code></li>
+<li>Supports nested access: <code>{user|name}</code>, <code>{data|0|key}</code></li>
+<li>Any expression result can be interpolated</li>
+</ul>
+
+<strong>Examples</strong>:
+<pre><code class="sol"><h1 id="basic-interpolation">Basic interpolation</h1>
+<p>name = "Sol".</p>
+<p>echo "Hello, {name}!".</p>
+
+<h1 id="multiple-variables">Multiple variables</h1>
+<p>version = "1.0".</p>
+<p>echo "Welcome to {name} version {version}".</p>
+
+<h1 id="nested-data-access">Nested data access</h1>
+<p>user = {"name": "Alice", "age": 30}.</p>
+<p>echo "User {user|name} is {user|age} years old".</p>
+
+<h1 id="pipeline-results">Pipeline results</h1>
+<p>path = getenv "HOME" |> unwrap_or "/tmp".</p>
+<p>echo "Using path: {path}".</code></pre></p>
+
+<h3 id="utilities"><strong>Utilities</strong></h3>
 
 <ul>
 <li><strong><code>echo text</code></strong> - Print text to stdout</li>
@@ -612,7 +803,7 @@
 <li>Example: <code>secure_hash = sha256 "sensitive_data".</code></li>
 </ul>
 
-<h3 id="<strong>Data Structures</strong>"><strong>Data Structures</strong></h3>
+<h3 id="data-structures"><strong>Data Structures</strong></h3>
 
 <p>Sol supports rich data structures with literal syntax:</p>
 
@@ -624,43 +815,109 @@
 <li><strong>Variable interpolation</strong>: <code>data|(variable)</code> - Use variable values as keys</li>
 </ul>
 
-<h2 id="USAGE">USAGE</h2>
+<h2 id="usage">USAGE</h2>
 
-<h3 id="Script Execution">Script Execution</h3>
+<h3 id="script-execution">Script Execution</h3>
 
-<pre><code class="bash">python main.py script.sol</code></pre>
+<pre><code class="bash">uv run python main.py script.sol</code></pre>
 
-<h3 id="Interactive Mode">Interactive Mode</h3>
+<h3 id="interactive-mode">Interactive Mode</h3>
 
-<pre><code class="bash">python main.py</code></pre>
+<p>The Sol REPL provides a modern interactive development environment with powerful features:</p>
 
-<h3 id="Debug Mode">Debug Mode</h3>
+<pre><code class="bash">uv run python main.py              # Start interactive REPL
+<p>uv run python main.py -i           # Alternative syntax</p>
+<p>uv run python main.py -i --debug   # REPL with debug mode</code></pre></p>
 
-<pre><code class="bash">python main.py --debug script.sol  # For script files
-<p>python main.py --debug             # For interactive mode</code></pre>
+<strong>Enhanced REPL Features:</strong>
+<ul>
+<li><strong>Command History</strong> - Persistent history across sessions (<code>~/.sol_history</code>)</li>
+<li><strong>Tab Completion</strong> - Auto-complete functions, keywords, and variables</li>
+<li><strong>Special Commands</strong> - <code>vars.</code>, <code>help.</code>, <code>cache.</code>, <code>clear.</code>, <code>exit.</code></li>
+<li><strong>Multi-line Input</strong> - Continue statements across multiple lines</li>
+<li><strong>Keyboard Shortcuts</strong> - Full readline support with Emacs/Vi modes</li>
+</ul>
 
-<h2 id="EXAMPLES">EXAMPLES</h2>
+<strong>REPL Commands:</strong>
+<pre><code class="bash">sol> help.          # Show all available functions
+<p>sol> vars.          # Show defined variables and functions</p>
+<p>sol> cache.         # Show cache performance statistics</p>
+<p>sol> clear.         # Clear screen</p>
+<p>sol> exit.          # Exit REPL (or Ctrl+D)</code></pre></p>
 
-<h3 id="<strong>Basic Operations</strong>"><strong>Basic Operations</strong></h3>
+<p>See [REPL_FEATURES.md](REPL_FEATURES.md) for detailed documentation and [REPL_QUICKREF.md](REPL_QUICKREF.md) for a quick reference guide.</p>
 
-<pre><code class="sol"><h1>File and directory operations</h1>
+<h3 id="debug-mode">Debug Mode</h3>
+
+<pre><code class="bash">uv run python main.py --debug script.sol  # For script files
+<p>uv run python main.py --debug             # For interactive mode</code></pre></p>
+
+<h2 id="examples">EXAMPLES</h2>
+
+<h3 id="basic-operations"><strong>Basic Operations</strong></h3>
+
+<pre><code class="sol"><h1 id="file-and-directory-operations">File and directory operations</h1>
 <p>echo "Setting up project structure".</p>
 <p>mkdir "my_project".</p>
 <p>mkdir "my_project/src".</p>
 <p>mkdir "my_project/docs".</p>
 
-<h1>Write configuration files</h1>
+<h1 id="write-configuration-files">Write configuration files</h1>
 <p>config = {"name": "MyProject", "version": "1.0", "debug": true}.</p>
 <p>jsonwrite config "my_project/config.json".</p>
 
-<h1>Read and display</h1>
+<h1 id="read-and-display">Read and display</h1>
 <p>project_config = jsonread "my_project/config.json".</p>
 <p>echo "Project configuration:".</p>
-<p>echo project_config.</code></pre>
+<p>echo project_config.</code></pre></p>
 
-<h3 id="<strong>System Information and Monitoring</strong>"><strong>System Information and Monitoring</strong></h3>
+<h3 id="new-features-pipelines-f-strings-and-result-types"><strong>New Features: Pipelines, F-Strings, and Result Types</strong></h3>
 
-<pre><code class="sol"><h1>Get comprehensive system information</h1>
+<pre><code class="sol"><h1 id="f-string-interpolation">F-String interpolation</h1>
+<p>project = "Sol".</p>
+<p>version = "1.0".</p>
+<p>echo "Welcome to {project} v{version}!".</p>
+
+<h1 id="pipeline-operator-for-data-transformations">Pipeline operator for data transformations</h1>
+<p>numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].</p>
+<p>numbers |> filter (> 5) |> map (* 2) |> fold + 0 |> echo.</p>
+<h1 id="output-90">Output: 90</h1>
+
+<h1 id="result-types-with-environment-variables">Result types with environment variables</h1>
+<p>home = getenv "HOME" |> unwrap_or "/tmp".</p>
+<p>echo "Home directory: {home}".</p>
+
+<h1 id="required-environment-variable-exits-if-not-found">Required environment variable (exits if not found)</h1>
+<p>config_path = getenv "CONFIG_PATH" |> unwrap_or_exit "CONFIG_PATH must be set".</p>
+
+<h1 id="shell-command-execution-with-result-types">Shell command execution with Result types</h1>
+<p>result = sh "ls -la".</p>
+<p>status = succeeded result.</p>
+<p>echo "Command succeeded: {status}".</p>
+
+<h1 id="safe-shell-command-with-fallback">Safe shell command with fallback</h1>
+<p>output = sh "which python3" |> unwrap_or "python3 not found".</p>
+<p>echo "Python location: {output}".</p>
+
+<h1 id="complex-pipeline-with-shell-commands">Complex pipeline with shell commands</h1>
+<p>sh "find . -name '*.py'"</p>
+<p>|> unwrap_or "No Python files found"</p>
+<p>|> echo.</p>
+
+<h1 id="combining-f-strings-pipelines-and-results">Combining f-strings, pipelines, and Results</h1>
+<p>user = whoami.</p>
+<p>host = hostname.</p>
+<p>dir = getenv "PWD" |> unwrap_or ".".</p>
+<p>echo "Running as {user}@{host} in {dir}".</p>
+
+<h1 id="data-pipeline-with-f-string-output">Data pipeline with f-string output</h1>
+<p>data = [100, 200, 300, 400, 500].</p>
+<p>average = data |> fold + 0 |> / (len data).</p>
+<p>echo "Average value: {average}".</code></pre></p>
+
+<h3 id="system-information-and-monitoring"><strong>System Information and Monitoring</strong></h3>
+
+<pre><code class="sol"><h1 id="get-comprehensive-system-information">Get comprehensive system information</h1>
 <p>user = whoami.</p>
 <p>host = hostname.</p>
 <p>cores = cpu_count.</p>
@@ -673,16 +930,16 @@
 <p>echo + "Host: " host.</p>
 <p>echo + "CPU Cores: " (to_string cores).</p>
 <p>echo + "CPU Usage: " (to_string cpu_usage) "%".</p>
-<p>echo + "Memory Usage: " (to_string mem_info|percent) "%".</code></pre>
+<p>echo + "Memory Usage: " (to_string mem_info|percent) "%".</code></pre></p>
 
-<h3 id="<strong>Data Processing and Analysis</strong>"><strong>Data Processing and Analysis</strong></h3>
+<h3 id="data-processing-and-analysis"><strong>Data Processing and Analysis</strong></h3>
 
-<pre><code class="sol"><h1>Create sample data</h1>
+<pre><code class="sol"><h1 id="create-sample-data">Create sample data</h1>
 <p>data = [10, 25, 5, 30, 45, 15, 35].</p>
 <p>echo "Original data:".</p>
 <p>echo data.</p>
 
-<h1>Filter and transform data</h1>
+<h1 id="filter-and-transform-data">Filter and transform data</h1>
 <p>high_values = filter (> 20) data.</p>
 <p>doubled = map (* 2) high_values.</p>
 <p>total = fold + doubled.</p>
@@ -692,43 +949,43 @@
 <p>echo "Doubled high values:".</p>
 <p>echo doubled.</p>
 <p>echo "Sum of doubled high values:".</p>
-<p>echo total.</code></pre>
+<p>echo total.</code></pre></p>
 
-<h3 id="<strong>Web and Network Operations</strong>"><strong>Web and Network Operations</strong></h3>
+<h3 id="web-and-network-operations"><strong>Web and Network Operations</strong></h3>
 
-<pre><code class="sol"><h1>Network diagnostics</h1>
+<pre><code class="sol"><h1 id="network-diagnostics">Network diagnostics</h1>
 <p>echo "=== Network Diagnostics ===".</p>
 
-<h1>DNS lookup</h1>
+<h1 id="dns-lookup">DNS lookup</h1>
 <p>github_dns = dns_lookup "github.com".</p>
 <p>echo "GitHub DNS:".</p>
 <p>echo github_dns.</p>
 
-<h1>Port scanning</h1>
+<h1 id="port-scanning">Port scanning</h1>
 <p>ssh_status = port_scan "github.com" 22.</p>
 <p>https_status = port_scan "github.com" 443.</p>
 <p>echo ssh_status.</p>
 <p>echo https_status.</p>
 
-<h1>Ping test</h1>
+<h1 id="ping-test">Ping test</h1>
 <p>ping_result = ping "8.8.8.8" 3.</p>
 <p>echo "Ping results:".</p>
-<p>echo ping_result.</code></pre>
+<p>echo ping_result.</code></pre></p>
 
-<h3 id="<strong>Data Format Conversion</strong>"><strong>Data Format Conversion</strong></h3>
+<h3 id="data-format-conversion"><strong>Data Format Conversion</strong></h3>
 
-<pre><code class="sol"><h1>Working with different data formats</h1>
+<pre><code class="sol"><h1 id="working-with-different-data-formats">Working with different data formats</h1>
 <p>sample_data = [</p>
 <p>{"name": "Alice", "age": 30, "city": "New York"},</p>
 <p>{"name": "Bob", "age": 25, "city": "San Francisco"},</p>
 <p>{"name": "Charlie", "age": 35, "city": "Chicago"}</p>
 <p>].</p>
 
-<h1>Convert to JSON</h1>
+<h1 id="convert-to-json">Convert to JSON</h1>
 <p>json_output = jsonstringify sample_data.</p>
 <p>write "people.json" json_output.</p>
 
-<h1>Create CSV version</h1>
+<h1 id="create-csv-version">Create CSV version</h1>
 <p>csv_data = [</p>
 <p>["name", "age", "city"],</p>
 <p>["Alice", "30", "New York"],</p>
@@ -737,59 +994,59 @@
 <p>].</p>
 <p>csvwrite csv_data "people.csv".</p>
 
-<p>echo "Data saved in both JSON and CSV formats".</code></pre>
+<p>echo "Data saved in both JSON and CSV formats".</code></pre></p>
 
-<h3 id="<strong>File Compression and Archives</strong>"><strong>File Compression and Archives</strong></h3>
+<h3 id="file-compression-and-archives"><strong>File Compression and Archives</strong></h3>
 
-<pre><code class="sol"><h1>Create test files</h1>
+<pre><code class="sol"><h1 id="create-test-files">Create test files</h1>
 <p>write "document1.txt" "This is the first document with important data.".</p>
 <p>write "document2.txt" "This is the second document with more information.".</p>
 <p>write "document3.txt" "This is the third document completing our dataset.".</p>
 
-<h1>Create different types of archives</h1>
+<h1 id="create-different-types-of-archives">Create different types of archives</h1>
 <p>zip_result = zip_create "documents.zip" "document1.txt" "document2.txt" "document3.txt".</p>
 <p>tar_result = tar_create "documents.tar.gz" "document1.txt" "document2.txt" "document3.txt".</p>
 
 <p>echo zip_result.</p>
 <p>echo tar_result.</p>
 
-<h1>Compress individual file</h1>
+<h1 id="compress-individual-file">Compress individual file</h1>
 <p>gzip_result = gzip_compress "document1.txt".</p>
 <p>echo gzip_result.</p>
 
-<h1>Extract and verify</h1>
+<h1 id="extract-and-verify">Extract and verify</h1>
 <p>mkdir "extracted".</p>
 <p>zip_extract "documents.zip" "extracted".</p>
-<p>ls "extracted".</code></pre>
+<p>ls "extracted".</code></pre></p>
 
-<h3 id="<strong>Environment and Process Management</strong>"><strong>Environment and Process Management</strong></h3>
+<h3 id="environment-and-process-management"><strong>Environment and Process Management</strong></h3>
 
-<pre><code class="sol"><h1>Environment variables</h1>
+<pre><code class="sol"><h1 id="environment-variables">Environment variables</h1>
 <p>home_dir = getenv "HOME".</p>
 <p>path_var = getenv "PATH".</p>
 <p>echo + "Home directory: " home_dir.</p>
 
-<h1>Set custom environment variable</h1>
+<h1 id="set-custom-environment-variable">Set custom environment variable</h1>
 <p>setenv "MY_APP_CONFIG" "/etc/myapp.conf".</p>
 <p>config_path = getenv "MY_APP_CONFIG".</p>
 <p>echo + "Config path: " config_path.</p>
 
-<h1>Process information</h1>
+<h1 id="process-information">Process information</h1>
 <p>running_processes = processes.</p>
 <p>echo "Top running processes:".</p>
-<p>echo running_processes.</code></pre>
+<p>echo running_processes.</code></pre></p>
 
-<h3 id="<strong>Advanced Functional Programming</strong>"><strong>Advanced Functional Programming</strong></h3>
+<h3 id="advanced-functional-programming"><strong>Advanced Functional Programming</strong></h3>
 
-<pre><code class="sol"><h1>Complex data transformation pipeline</h1>
+<pre><code class="sol"><h1 id="complex-data-transformation-pipeline">Complex data transformation pipeline</h1>
 <p>numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].</p>
 
-<h1>Create reusable functions</h1>
+<h1 id="create-reusable-functions">Create reusable functions</h1>
 <p>is_even = filter (== 0).</p>
 <p>multiply_by_three = map (* 3).</p>
 <p>greater_than_ten = filter (> 10).</p>
 
-<h1>Process even numbers</h1>
+<h1 id="process-even-numbers">Process even numbers</h1>
 <p>even_numbers = is_even (map (% 2) numbers).  # Get remainders, then filter zeros</p>
 <p>tripled_evens = multiply_by_three even_numbers.</p>
 <p>big_tripled_evens = greater_than_ten tripled_evens.</p>
@@ -799,107 +1056,107 @@
 <p>echo "Even numbers tripled (>10):".</p>
 <p>echo big_tripled_evens.</p>
 
-<h1>Statistical operations</h1>
+<h1 id="statistical-operations">Statistical operations</h1>
 <p>sum_all = fold + numbers.</p>
 <p>count = fold + (map (* 0) numbers).  # Convert to zeros, then count</p>
 <p>average = / sum_all count.</p>
 
-<p>echo + "Average: " (to_string average).</code></pre>
+<p>echo + "Average: " (to_string average).</code></pre></p>
 
-<h3 id="<strong>File Management and Git Workflow</strong>"><strong>File Management and Git Workflow</strong></h3>
+<h3 id="file-management-and-git-workflow"><strong>File Management and Git Workflow</strong></h3>
 
-<pre><code class="sol"><h1>Project setup and file management</h1>
+<pre><code class="sol"><h1 id="project-setup-and-file-management">Project setup and file management</h1>
 <p>echo "=== Setting up project structure ===".</p>
 
-<h1>Create project directories</h1>
+<h1 id="create-project-directories">Create project directories</h1>
 <p>mkdir "my_project".</p>
 <p>mkdir "my_project/src".</p>
 <p>mkdir "my_project/docs".</p>
 <p>mkdir "my_project/tests".</p>
 
-<h1>Create some sample files</h1>
+<h1 id="create-some-sample-files">Create some sample files</h1>
 <p>write "my_project/README.md" "# My Project\n\nThis is a sample project.".</p>
 <p>write "my_project/src/main.py" "print('Hello World')".</p>
 <p>write "my_project/tests/test_main.py" "# Test file".</p>
 
-<h1>Copy important files</h1>
+<h1 id="copy-important-files">Copy important files</h1>
 <p>cp "my_project/README.md" "my_project/docs/README_backup.md".</p>
 
-<h1>Set executable permissions for scripts</h1>
+<h1 id="set-executable-permissions-for-scripts">Set executable permissions for scripts</h1>
 <p>chmod "my_project/src/main.py" "755".</p>
 
-<h1>Find all Python files</h1>
+<h1 id="find-all-python-files">Find all Python files</h1>
 <p>python_files = find "my_project" "*.py".</p>
 <p>echo "Python files found:".</p>
 <p>echo python_files.</p>
 
-<h1>Check directory size</h1>
+<h1 id="check-directory-size">Check directory size</h1>
 <p>project_size = du "my_project".</p>
 <p>echo "Project size information:".</p>
-<p>echo project_size.</code></pre>
+<p>echo project_size.</code></pre></p>
 
-<h3 id="<strong>Git Version Control Workflow</strong>"><strong>Git Version Control Workflow</strong></h3>
+<h3 id="git-version-control-workflow"><strong>Git Version Control Workflow</strong></h3>
 
-<pre><code class="sol"><h1>Initialize and set up git repository (assumes git repo exists)</h1>
+<pre><code class="sol"><h1 id="initialize-and-set-up-git-repository-assumes-git-repo-exists">Initialize and set up git repository (assumes git repo exists)</h1>
 <p>echo "=== Git workflow demonstration ===".</p>
 
-<h1>Check current status</h1>
+<h1 id="check-current-status">Check current status</h1>
 <p>status = git_status.</p>
 <p>echo "Current git status:".</p>
 <p>echo status.</p>
 
-<h1>Quick update workflow</h1>
+<h1 id="quick-update-workflow">Quick update workflow</h1>
 <p>echo "Performing quick update...".</p>
 <p>update_result = gitupdate.</p>
 <p>echo update_result.</p>
 
-<h1>View recent commits</h1>
+<h1 id="view-recent-commits">View recent commits</h1>
 <p>echo "Recent commit history:".</p>
 <p>commits = git_log 5.</p>
 <p>echo commits.</p>
 
-<h1>Full sync with remote</h1>
+<h1 id="full-sync-with-remote">Full sync with remote</h1>
 <p>echo "Performing full sync...".</p>
 <p>sync_result = gitsync.</p>
 <p>echo sync_result.</p>
 
-<h1>Check branches</h1>
+<h1 id="check-branches">Check branches</h1>
 <p>echo "Available branches:".</p>
 <p>branches = git_branch.</p>
-<p>echo branches.</code></pre>
+<p>echo branches.</code></pre></p>
 
-<h3 id="<strong>Integrated Project Management</strong>"><strong>Integrated Project Management</strong></h3>
+<h3 id="integrated-project-management"><strong>Integrated Project Management</strong></h3>
 
-<pre><code class="sol"><h1>Combined filesystem and git operations</h1>
+<pre><code class="sol"><h1 id="combined-filesystem-and-git-operations">Combined filesystem and git operations</h1>
 <p>echo "=== Integrated project management ===".</p>
 
-<h1>Create a new feature</h1>
+<h1 id="create-a-new-feature">Create a new feature</h1>
 <p>mkdir "feature_branch".</p>
 <p>write "feature_branch/new_feature.py" "# New feature implementation".</p>
 
-<h1>Copy to main project</h1>
+<h1 id="copy-to-main-project">Copy to main project</h1>
 <p>cp "feature_branch/new_feature.py" "my_project/src/".</p>
 
-<h1>Clean up temporary directory</h1>
+<h1 id="clean-up-temporary-directory">Clean up temporary directory</h1>
 <p>rm "feature_branch".</p>
 
-<h1>Stage and commit the changes</h1>
+<h1 id="stage-and-commit-the-changes">Stage and commit the changes</h1>
 <p>git_add "my_project/src/new_feature.py".</p>
 <p>commit_result = git_commit "Add new feature implementation".</p>
 <p>echo commit_result.</p>
 
-<h1>Push to remote</h1>
+<h1 id="push-to-remote">Push to remote</h1>
 <p>push_result = git_push.</p>
 <p>echo push_result.</p>
 
-<h1>Verify the changes</h1>
+<h1 id="verify-the-changes">Verify the changes</h1>
 <p>final_status = git_status.</p>
 <p>echo "Final status:".</p>
-<p>echo final_status.</code></pre>
+<p>echo final_status.</code></pre></p>
 
-<h3 id="<strong>Nested Data Structure Manipulation</strong>"><strong>Nested Data Structure Manipulation</strong></h3>
+<h3 id="nested-data-structure-manipulation"><strong>Nested Data Structure Manipulation</strong></h3>
 
-<pre><code class="sol"><h1>Complex nested data structure</h1>
+<pre><code class="sol"><h1 id="complex-nested-data-structure">Complex nested data structure</h1>
 <p>company_data = {</p>
 <p>"company": "Tech Corp",</p>
 <p>"employees": [</p>
@@ -910,7 +1167,7 @@
 <p>"locations": ["New York", "San Francisco", "Austin"]</p>
 <p>}.</p>
 
-<h1>Access nested data</h1>
+<h1 id="access-nested-data">Access nested data</h1>
 <p>company_name = company_data|company.</p>
 <p>first_employee = company_data|employees|1.</p>
 <p>first_location = company_data|locations|1.</p>
@@ -920,53 +1177,12 @@
 <p>echo first_employee.</p>
 <p>echo + "First location: " first_location.</p>
 
-<h1>Modify nested data</h1>
+<h1 id="modify-nested-data">Modify nested data</h1>
 <p>updated_data = set company_data "employees|1|salary" 100000.</p>
 <p>alice_new_salary = updated_data|employees|1|salary.</p>
-<p>echo + "Alice's updated salary: " (to_string alice_new_salary).</code></pre>
+<p>echo + "Alice's updated salary: " (to_string alice_new_salary).</code></pre></p>
 
-<h2 id="IMPLEMENTATION">IMPLEMENTATION</h2>
-
-<p>Sol is implemented using:</p>
-
-<ul>
-<li><strong>pyparsing</strong> for robust syntax parsing with detailed error messages</li>
-<li><strong>Python standard library</strong> for all operations (no external dependencies)</li>
-<li><strong>Functional design</strong> inspired by Haskell and modern functional languages</li>
-<li><strong>Clean architecture</strong> with separation between parsing, execution, and standard library</li>
-</ul>
-
-<p>Key features:</p>
-
-<ul>
-<li><strong>Zero external dependencies</strong> - Everything uses Python's built-in libraries</li>
-<li><strong>Comprehensive error handling</strong> - Detailed error messages with suggestions</li>
-<li><strong>Partial function support</strong> - Create reusable function objects</li>
-<li><strong>Rich data structures</strong> - Arrays, dictionaries, and nested combinations</li>
-<li><strong>1-indexed arrays</strong> - Natural counting for non-programmers</li>
-<li><strong>Intuitive access syntax</strong> - Chain property access with <code>|</code> separator</li>
-</ul>
-
-<p>The parser generates an AST-like structure and executes it using Python's built-in libraries, providing access to Python's vast ecosystem without requiring external system tools or packages.</p>
-
-<h2 id="PROJECT STRUCTURE">PROJECT STRUCTURE</h2>
-
-<pre><code class="">sol/
-<p>├── main.py              # Sol interpreter, parser, and standard library</p>
-<p>├── DESIGN.md           # Language design document and philosophy</p>
-<p>├── README.md           # This comprehensive documentation</p>
-<p>├── pyproject.toml      # Project configuration and dependencies</p>
-<p>├── uv.lock            # Lock file for reproducible builds</p>
-<p>├── examples/          # Example Sol scripts and demonstrations</p>
-<p>│   ├── simple.sol     # Basic language features</p>
-<p>│   ├── comprehensive.sol  # Advanced functionality showcase</p>
-<p>│   ├── networking.sol # Network operations examples</p>
-<p>│   └── filesystem_clean.sol  # File management examples</p>
-<p>├── debug/            # Debug and test scripts</p>
-<p>├── tests/           # Test suite</p>
-<p>└── demo_project/    # Sample project structure</code></pre>
-
-<h2 id="LANGUAGE PHILOSOPHY">LANGUAGE PHILOSOPHY</h2>
+<h2 id="principles">PRINCIPLES</h2>
 
 <p>Sol is designed around several core principles:</p>
 
@@ -978,6 +1194,39 @@
 <p>6. <strong>Zero Setup</strong> - No package management, no build systems, just Python</p>
 
 <p>Sol bridges the gap between shell scripting and full programming languages, offering the simplicity of shell commands with the power and structure of modern functional programming.</p>
+
+<h2 id="testing">TESTING</h2>
+
+<p>Sol comes with a comprehensive test suite to ensure reliability and correctness. All tests are organized in the <code>tests/</code> directory.</p>
+
+<h3 id="running-tests">Running Tests</h3>
+
+<p>Run all tests:</p>
+<pre><code class="bash">python run_tests.py</code></pre>
+
+<p>Run specific test categories:</p>
+<pre><code class="bash">python run_tests.py features     # New feature tests
+<p>python run_tests.py repl         # REPL functionality tests</p>
+<p>python run_tests.py performance  # Performance benchmarks</code></pre></p>
+
+<p>Options:</p>
+<pre><code class="bash">python run_tests.py -v           # Verbose output
+<p>python run_tests.py -f           # Fail fast (stop on first failure)</code></pre></p>
+
+<h3 id="test-coverage">Test Coverage</h3>
+
+<p>The test suite includes:</p>
+<ul>
+<li>✅ Result types (<code>unwrap_or</code>, <code>unwrap_or_exit</code>, <code>failed</code>, <code>succeeded</code>)</li>
+<li>✅ Pipeline operator (<code>|></code>)</li>
+<li>✅ F-string interpolation</li>
+<li>✅ REPL function persistence</li>
+<li>✅ REPL variable persistence</li>
+<li>✅ Core language features</li>
+<li>✅ Standard library functions</li>
+</ul>
+
+<p>For more details, see [<code>tests/README.md</code>](tests/README.md).</p>
 
         </main>
     </div>
