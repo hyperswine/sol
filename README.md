@@ -810,3 +810,40 @@ Sol is designed around several core principles:
 6. **Zero Setup** - No package management, no build systems, just Python
 
 Sol bridges the gap between shell scripting and full programming languages, offering the simplicity of shell commands with the power and structure of modern functional programming.
+
+## TESTING
+
+Sol comes with a comprehensive test suite to ensure reliability and correctness. All tests are organized in the `tests/` directory.
+
+### Running Tests
+
+Run all tests:
+```bash
+python run_tests.py
+```
+
+Run specific test categories:
+```bash
+python run_tests.py features     # New feature tests
+python run_tests.py repl         # REPL functionality tests
+python run_tests.py performance  # Performance benchmarks
+```
+
+Options:
+```bash
+python run_tests.py -v           # Verbose output
+python run_tests.py -f           # Fail fast (stop on first failure)
+```
+
+### Test Coverage
+
+The test suite includes:
+- ✅ Result types (`unwrap_or`, `unwrap_or_exit`, `failed`, `succeeded`)
+- ✅ Pipeline operator (`|>`)
+- ✅ F-string interpolation
+- ✅ REPL function persistence
+- ✅ REPL variable persistence
+- ✅ Core language features
+- ✅ Standard library functions
+
+For more details, see [`tests/README.md`](tests/README.md).

@@ -4,6 +4,10 @@ Test script to demonstrate enhanced REPL features
 import subprocess
 import sys
 from pathlib import Path
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 
 
 def test_repl_features():

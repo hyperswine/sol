@@ -3,6 +3,10 @@
 Test the combined features with simpler examples
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from parsing import create_parser
 from interpret import create_interpreter
 import os

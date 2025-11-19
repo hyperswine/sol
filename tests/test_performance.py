@@ -2,8 +2,13 @@
 Performance test for optimized Sol interpreter
 """
 import time
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from interpret import Environment, create_interpreter, get_cache_info, clear_caches
 from parsing import create_parser
+
 
 
 def test_environment_performance():

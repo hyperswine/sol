@@ -6,6 +6,10 @@ Test script for new Sol features:
 3. F-strings with double quotes
 """
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from parsing import create_parser
 from interpret import create_interpreter
 
