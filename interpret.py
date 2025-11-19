@@ -2,39 +2,41 @@
 Sol Language Interpreter - Functional implementation using toolz and functools
 """
 from typing import Dict, List, Any, Union, Callable, Tuple, Optional
-from functools import partial, reduce
+from functools import partial, reduce, lru_cache
 from toolz import pipe, curry, compose, get_in, assoc_in
 from dataclasses import dataclass, field
+from pyrsistent import pmap, pvector, PMap, PVector
 from stdlib import FUNCTION_MAP
 
 
 @dataclass(frozen=True)
 class Environment:
-  """Immutable environment for variable and function storage"""
-  variables: Dict[str, Any] = field(default_factory=dict)
-  user_functions: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+  """Immutable environment for variable and function storage using persistent data structures"""
+  variables: PMap = field(default_factory=pmap)
+  user_functions: PMap = field(default_factory=pmap)
 
   def with_variable(self, name: str, value: Any) -> 'Environment':
-    """Return new environment with added variable"""
-    new_vars = {**self.variables, name: value}
+    """Return new environment with added variable - O(log n) with structural sharing"""
+    new_vars = self.variables.set(name, value)
     return Environment(new_vars, self.user_functions)
 
   def with_variables(self, variables: Dict[str, Any]) -> 'Environment':
-    """Return new environment with added variables"""
-    new_vars = {**self.variables, **variables}
+    """Return new environment with added variables - efficient batch update"""
+    new_vars = self.variables.update(variables)
     return Environment(new_vars, self.user_functions)
 
   def with_function(self, name: str, params: List[str], body: List[Any]) -> 'Environment':
-    """Return new environment with added user function"""
-    new_funcs = {**self.user_functions, name: {'params': params, 'body': body}}
+    """Return new environment with added user function - O(log n) with structural sharing"""
+    func_def = pmap({'params': pvector(params), 'body': pvector(body)})
+    new_funcs = self.user_functions.set(name, func_def)
     return Environment(self.variables, new_funcs)
 
   def get_variable(self, name: str) -> Any:
-    """Get variable value"""
+    """Get variable value - O(log n) lookup"""
     return self.variables.get(name)
 
-  def get_function(self, name: str) -> Optional[Dict[str, Any]]:
-    """Get user function definition"""
+  def get_function(self, name: str) -> Optional[PMap]:
+    """Get user function definition - O(log n) lookup"""
     return self.user_functions.get(name)
 
 
@@ -61,21 +63,31 @@ def process_number_literal(value: Union[int, float]) -> Union[int, float]:
   return value
 
 
-def process_variable_reference(name: str, env: Environment) -> Any:
-  """Process variable reference (pure function)"""
-  value = env.get_variable(name)
-  if value is not None:
-    return value
-
-  # Try to parse as number if not found as variable
+@lru_cache(maxsize=512)
+def _parse_number(name: str) -> Union[int, float, None]:
+  """Cache number parsing results - pure function"""
   try:
     if '.' in name:
       return float(name)
     else:
       return int(name)
   except ValueError:
-    # Return as string if can't parse as number
-    return name
+    return None
+
+
+def process_variable_reference(name: str, env: Environment) -> Any:
+  """Process variable reference (pure function with caching)"""
+  value = env.get_variable(name)
+  if value is not None:
+    return value
+
+  # Try to parse as number if not found as variable (cached)
+  parsed_num = _parse_number(name)
+  if parsed_num is not None:
+    return parsed_num
+
+  # Return as string if can't parse as number
+  return name
 
 
 def process_array_elements(elements: List[Any], env: Environment) -> List[Any]:
@@ -305,10 +317,10 @@ def _process_argument(arg: Any, env: Environment) -> Any:
     return arg
 
 
-def _execute_user_function(func_name: str, func_def: Dict[str, Any], processed_args: List[Any], env: Environment) -> Tuple[Any, Environment]:
-  """Execute a user-defined function"""
-  params = func_def['params']
-  body = func_def['body']
+def _execute_user_function(func_name: str, func_def: PMap, processed_args: List[Any], env: Environment) -> Tuple[Any, Environment]:
+  """Execute a user-defined function with persistent data structures"""
+  params = list(func_def['params'])  # Convert PVector to list
+  body = list(func_def['body'])  # Convert PVector to list
 
   if len(processed_args) != len(params):
     error_msg = (
@@ -318,13 +330,13 @@ def _execute_user_function(func_name: str, func_def: Dict[str, Any], processed_a
     )
     return error_msg, env
 
-  # Create local environment with parameter bindings
+  # Create local environment with parameter bindings (efficient batch update)
   local_vars = dict(zip(params, processed_args))
   local_env = env.with_variables(local_vars)
 
   # Execute the function body
   try:
-    result, _ = execute_function_call(list(body), local_env)
+    result, _ = execute_function_call(body, local_env)
     return result, env  # Return original environment (function scope is local)
   except Exception as e:
     return f"Error executing user-defined function '{func_name}': {str(e)}", env
@@ -503,13 +515,19 @@ class SolInterpreter:
       ([], self.environment)
     )
 
-    return final_results, final_env.variables
+    return final_results, dict(final_env.variables)  # Convert PMap to dict
 
   def get_environment_snapshot(self) -> Dict[str, Any]:
-    """Get a snapshot of the current environment state"""
+    """Get a snapshot of the current environment state (converts PMap to dict)"""
     return {
         'variables': dict(self.environment.variables),
-        'user_functions': dict(self.environment.user_functions)
+        'user_functions': {
+            name: {
+                'params': list(func['params']),
+                'body': list(func['body'])
+            }
+            for name, func in self.environment.user_functions.items()
+        }
     }
 
   def set_variable(self, name: str, value: Any) -> None:
@@ -536,3 +554,16 @@ def parse_and_interpret(parser, code: str, debug: bool = False) -> Tuple[Any, Di
   interpreter = create_interpreter(debug)
   parsed = parser.parse(code)
   return interpreter.run(parsed, print_immediately=False)
+
+
+def get_cache_info() -> Dict[str, Any]:
+  """Get cache statistics for performance monitoring"""
+  return {
+      '_parse_number': _parse_number.cache_info()._asdict()
+  }
+
+
+def clear_caches() -> None:
+  """Clear all LRU caches - useful for testing or memory management"""
+  _parse_number.cache_clear()
+
