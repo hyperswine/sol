@@ -88,3 +88,17 @@ WANT LATER
 
 - Pipe syntax: `file |> fs.read |> text.grep "error"`
 - Len or something
+
+------------------
+
+ARCH
+
+REPL or RUN ONCE mode
+
+proper Result and match. Can literally just get away with Result type
+match looks like
+
+x ? y : z.
+
+means if x is an Ok x, then unwrap x and execute y
+if x is not Ok then x doesnt unwrap and you dont use it
