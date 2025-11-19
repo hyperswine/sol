@@ -58,6 +58,26 @@ def process_string_literal(token_tuple: Tuple[str, str]) -> str:
   return token_tuple[1]
 
 
+def process_fstring_literal(token_tuple: Tuple[str, str], env: Environment) -> str:
+  """Process f-string literal with variable interpolation (pure function)"""
+  import re
+  fstring = token_tuple[1]
+
+  # Find all {variable} patterns
+  pattern = r'\{(\w+)\}'
+
+  def replace_var(match):
+    var_name = match.group(1)
+    value = env.get_variable(var_name)
+    if value is not None:
+      return str(value)
+    else:
+      # Keep original if variable not found
+      return match.group(0)
+
+  return re.sub(pattern, replace_var, fstring)
+
+
 def process_number_literal(value: Union[int, float]) -> Union[int, float]:
   """Process number literal (pure function)"""
   return value
@@ -97,12 +117,17 @@ def process_array_elements(elements: List[Any], env: Environment) -> List[Any]:
     if isinstance(element, tuple) and len(element) == 2:
       if element[0] == "STRING_LITERAL":
         return process_string_literal(element)
+      elif element[0] == "FSTRING_LITERAL":
+        return process_fstring_literal(element, env)
       elif element[0] == "ARRAY_LITERAL":
         return process_array_elements(element[1], env)
       elif element[0] == "DICT_LITERAL":
         return process_dict_elements(element[1], env)
       elif element[0] == "ACCESS":
         return process_access_expression(element[1], env)
+      elif element[0] == "PIPELINE":
+        result, _ = process_pipeline(element[1], env)
+        return result
       else:
         return element[1]  # Other tuple types
     elif isinstance(element, str):
@@ -116,6 +141,75 @@ def process_array_elements(elements: List[Any], env: Environment) -> List[Any]:
   return list(map(process_element, elements))
 
 
+def process_pipeline(pipeline_parts: List[Any], env: Environment) -> Tuple[Any, Environment]:
+  """
+  Process pipeline expression like: value |> func1 |> func2
+  Pipeline syntax transforms: value |> func1 arg |> func2
+  Into: func2(func1(value, arg))
+
+  The pipeline_parts format is:
+  [initial_expr, '|>', func1_name, arg1, arg2, '|>', func2_name, ...]
+  """
+  if len(pipeline_parts) < 3:
+    return ("Error: Pipeline needs at least initial value, |>, and one function", env)
+
+  # Find all pipeline operators to split the expression into stages
+  pipe_indices = [i for i, part in enumerate(pipeline_parts) if part == '|>']
+
+  if not pipe_indices:
+    return ("Error: Pipeline needs at least one |> operator", env)
+
+  # Process initial value (everything before first |>)
+  initial_parts = pipeline_parts[:pipe_indices[0]]
+
+  if len(initial_parts) == 1:
+    initial_value = initial_parts[0]
+    # Process initial value
+    if isinstance(initial_value, tuple) and len(initial_value) == 2:
+      if initial_value[0] == "STRING_LITERAL":
+        current_value = process_string_literal(initial_value)
+      elif initial_value[0] == "FSTRING_LITERAL":
+        current_value = process_fstring_literal(initial_value, env)
+      elif initial_value[0] == "ARRAY_LITERAL":
+        current_value = process_array_elements(initial_value[1], env)
+      elif initial_value[0] == "DICT_LITERAL":
+        current_value = process_dict_elements(initial_value[1], env)
+      elif initial_value[0] == "ACCESS":
+        current_value = process_access_expression(initial_value[1], env)
+      elif initial_value[0] == "PARENTHESIZED":
+        current_value, _ = execute_function_call(list(initial_value[1]), env)
+      else:
+        current_value = initial_value[1]
+    elif isinstance(initial_value, str):
+      current_value = process_variable_reference(initial_value, env)
+    elif isinstance(initial_value, (int, float)):
+      current_value = initial_value
+    else:
+      current_value = initial_value
+  else:
+    # Initial value is a function call
+    current_value, env = execute_function_call(initial_parts, env)
+
+  # Process each pipeline stage
+  pipe_indices.append(len(pipeline_parts))  # Add end marker
+
+  for i in range(len(pipe_indices) - 1):
+    start_idx = pipe_indices[i] + 1  # Skip the |>
+    end_idx = pipe_indices[i + 1]
+
+    if start_idx >= end_idx:
+      return ("Error: Pipeline operator |> must be followed by a function", env)
+
+    # Extract function call: [func_name, arg1, arg2, ...]
+    func_parts = pipeline_parts[start_idx:end_idx]
+
+    # Insert current_value as the FIRST argument after function name
+    augmented_call = [func_parts[0], current_value] + func_parts[1:]
+    current_value, env = execute_function_call(augmented_call, env)
+
+  return current_value, env
+
+
 def process_dict_elements(pairs: List[Tuple[Any, Any]], env: Environment) -> Dict[str, Any]:
   """Process dictionary key-value pairs (pure function with recursion)"""
   def process_pair(key_value_pair):
@@ -125,6 +219,8 @@ def process_dict_elements(pairs: List[Tuple[Any, Any]], env: Environment) -> Dic
     # Process key
     if isinstance(key, tuple) and key[0] == "STRING_LITERAL":
       processed_key = process_string_literal(key)
+    elif isinstance(key, tuple) and key[0] == "FSTRING_LITERAL":
+      processed_key = process_fstring_literal(key, env)
     elif isinstance(key, str):
       processed_key = key
     else:
@@ -136,12 +232,16 @@ def process_dict_elements(pairs: List[Tuple[Any, Any]], env: Environment) -> Dic
     elif isinstance(value, tuple) and len(value) == 2:
       if value[0] == "STRING_LITERAL":
         processed_value = process_string_literal(value)
+      elif value[0] == "FSTRING_LITERAL":
+        processed_value = process_fstring_literal(value, env)
       elif value[0] == "ARRAY_LITERAL":
         processed_value = process_array_elements(value[1], env)
       elif value[0] == "DICT_LITERAL":
         processed_value = process_dict_elements(value[1], env)
       elif value[0] == "ACCESS":
         processed_value = process_access_expression(value[1], env)
+      elif value[0] == "PIPELINE":
+        processed_value, _ = process_pipeline(value[1], env)
       else:
         processed_value = value[1]
     elif isinstance(value, str):
@@ -296,6 +396,8 @@ def _process_argument(arg: Any, env: Environment) -> Any:
   elif isinstance(arg, tuple) and len(arg) == 2:
     if arg[0] == "STRING_LITERAL":
       return process_string_literal(arg)
+    elif arg[0] == "FSTRING_LITERAL":
+      return process_fstring_literal(arg, env)
     elif arg[0] == "ARRAY_LITERAL":
       return process_array_elements(arg[1], env)
     elif arg[0] == "DICT_LITERAL":
@@ -304,6 +406,9 @@ def _process_argument(arg: Any, env: Environment) -> Any:
       return process_access_expression(arg[1], env)
     elif arg[0] == "PARENTHESIZED":
       result, _ = execute_function_call(list(arg[1]), env)
+      return result
+    elif arg[0] == "PIPELINE":
+      result, _ = process_pipeline(arg[1], env)
       return result
     else:
       return arg[1]
@@ -433,6 +538,8 @@ def _process_single_assignment_value(single_value: Any, env: Environment) -> Any
   elif isinstance(single_value, tuple) and len(single_value) == 2:
     if single_value[0] == "STRING_LITERAL":
       return process_string_literal(single_value)
+    elif single_value[0] == "FSTRING_LITERAL":
+      return process_fstring_literal(single_value, env)
     elif single_value[0] == "ARRAY_LITERAL":
       return process_array_elements(single_value[1], env)
     elif single_value[0] == "DICT_LITERAL":
@@ -441,6 +548,9 @@ def _process_single_assignment_value(single_value: Any, env: Environment) -> Any
       return process_access_expression(single_value[1], env)
     elif single_value[0] == "PARENTHESIZED":
       result, _ = execute_function_call(list(single_value[1]), env)
+      return result
+    elif single_value[0] == "PIPELINE":
+      result, _ = process_pipeline(single_value[1], env)
       return result
     else:
       return single_value[1]

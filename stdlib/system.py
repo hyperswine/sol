@@ -3,8 +3,10 @@ Sol Standard Library - System Operations Module
 Provides system information and environment variable functions.
 """
 import os
-from typing import Any, Dict, Optional
+import subprocess
+from typing import Any, Dict, Optional, Union
 from toolz import curry
+from .result import Result, ok, err
 
 
 def _import_psutil():
@@ -111,24 +113,32 @@ def disk_usage(path: str = "/") -> Dict[str, Any]:
 
 
 @curry
-def getenv(key: str, default: Optional[str] = None) -> str:
+def getenv(key: str, default: Optional[str] = None) -> Union[str, Result]:
     """
     Get environment variable value.
 
     Args:
         key: Environment variable name
-        default: Default value if not found (default: "")
+        default: Default value if not found (default: None, returns Result.Err)
 
     Returns:
-        Environment variable value or default
+        Environment variable value if found, or Result.Err if not found and no default
 
     Examples:
         >>> getenv("HOME")
         '/home/user'
+        >>> getenv("MISSING_VAR")
+        Err('Environment variable MISSING_VAR not found')
         >>> getenv("MISSING_VAR", "default_value")
         'default_value'
     """
-    return os.getenv(key, default or "")
+    value = os.getenv(key)
+    if value is not None:
+        return value
+    elif default is not None:
+        return default
+    else:
+        return err(f"Environment variable {key} not found")
 
 
 @curry
@@ -171,8 +181,66 @@ def listenv() -> Dict[str, str]:
     return dict(os.environ)
 
 
+def sh(command: str) -> Result:
+    """
+    Execute a shell command and return a Result.
+
+    Args:
+        command: Shell command to execute
+
+    Returns:
+        Result with dict containing stdout, stderr, and exit_code if successful,
+        or error message if failed
+
+    Examples:
+        >>> sh("echo hello")
+        Ok({'stdout': 'hello\\n', 'stderr': '', 'exit_code': 0})
+        >>> sh("false")
+        Err({'stdout': '', 'stderr': '', 'exit_code': 1})
+    """
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minute timeout
+        )
+
+        output_dict = {
+            'stdout': result.stdout,
+            'stderr': result.stderr,
+            'exit_code': result.returncode
+        }
+
+        # Success if exit code is 0
+        if result.returncode == 0:
+            return ok(output_dict)
+        else:
+            return err(f"Command failed with exit code {result.returncode}")
+    except subprocess.TimeoutExpired:
+        return err("Command timed out after 5 minutes")
+    except Exception as e:
+        return err(f"Failed to execute command: {str(e)}")
+
+
+def exit_cmd(code: int = 0) -> None:
+    """
+    Exit the program with given exit code.
+
+    Args:
+        code: Exit code (default: 0 for success)
+
+    Examples:
+        >>> exit_cmd(0)
+        >>> exit_cmd(1)
+    """
+    import sys
+    sys.exit(code)
+
+
 # Export all functions
 __all__ = [
     'cpu_count', 'memory_info', 'disk_usage',
-    'getenv', 'setenv', 'listenv'
+    'getenv', 'setenv', 'listenv', 'sh', 'exit_cmd'
 ]

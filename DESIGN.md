@@ -91,6 +91,8 @@ WANT LATER
 
 ------------------
 
+NEW STUFF
+
 ARCH
 
 REPL or RUN ONCE mode
@@ -100,4 +102,33 @@ no match.
 
 ALSO function defs arent working in REPL mode. Issue with the new environment
 
-can only use unwrap_or_else
+can only use unwrap_or and unwrap_or_exit
+
+as well as f-strings python like. Only works for vars so you cant do arbitrary expressions.
+
+myvar = myrecord|thing|anotherthing.
+echo "this is myvar = {myvar}".
+
+use "" for f-strings and '' for regular strings.
+
+Full example
+
+```
+# Define helper function
+build_service service =
+  echo f"Building {service}..."
+  result = sh f"docker build -t {service}:latest ./services/{service}".
+  if (failed result) then
+    echo f"Build failed for {service}:"
+    echo result|stderr
+    exit 1.
+
+push_service service =
+  tag = f"{registry}/{service}:{version}".
+  sh f"docker tag {service}:latest {tag}" |> unwrap_or_exit f"Tag failed for {service}".
+  sh f"docker push {tag}" |> unwrap_or_exit f"Push failed for {service}".
+
+# Use them
+services |> map build_service.
+services |> map push_service.
+```

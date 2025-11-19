@@ -137,9 +137,18 @@ class SolGrammar:
     operator = pp['oneOf']("+ - * / < > = ! <= >= == !=")
     function_name = operator | identifier
 
-    string_literal = pp['QuotedString']('"', escChar='\\').setParseAction(
+    # F-string support: double quotes with {variable} interpolation
+    # Regular string: single quotes, no interpolation
+    fstring_literal = pp['QuotedString']('"', escChar='\\').setParseAction(
+        lambda t: ("FSTRING_LITERAL", t[0])
+    )
+
+    regular_string = pp['QuotedString']("'", escChar='\\').setParseAction(
         lambda t: ("STRING_LITERAL", t[0])
     )
+
+    # Keep original double-quote for backwards compatibility initially
+    string_literal = fstring_literal | regular_string
 
     number = pp['Regex'](r'-?\d+(\.\d+)?').setParseAction(
         lambda t: float(t[0]) if '.' in t[0] else int(t[0])
@@ -150,6 +159,7 @@ class SolGrammar:
     base_expr = pp['Forward']()
     function_call = pp['Forward']()
     argument = pp['Forward']()
+    pipeline = pp['Forward']()
 
     array_literal = (
         pp['Suppress']("[") +
@@ -189,7 +199,14 @@ class SolGrammar:
 
     function_call <<= function_name + pp['ZeroOrMore'](argument)
 
-    value = (access_expr | function_call | dict_literal | array_literal |
+    # Pipeline: value |> function1 |> function2
+    pipeline_expr = (
+        (access_expr | function_call | dict_literal | array_literal |
+         string_literal | number | parenthesized_expr | identifier) +
+        pp['OneOrMore'](pp['Literal']("|>") + function_call)
+    ).setParseAction(lambda t: ("PIPELINE", list(t)))
+
+    value = (pipeline_expr | access_expr | function_call | dict_literal | array_literal |
              string_literal | number | parenthesized_expr | identifier)
 
     equals = pp['Literal']("=")

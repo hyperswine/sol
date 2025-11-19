@@ -12,6 +12,7 @@ from . import system
 from . import hashing
 from . import operators
 from . import conversion
+from . import result
 
 
 # Build the FUNCTION_MAP by aggregating all module functions
@@ -59,6 +60,8 @@ FUNCTION_MAP = {
     'getenv': system.getenv,
     'setenv': system.setenv,
     'listenv': system.listenv,
+    'sh': system.sh,
+    'exit': system.exit_cmd,
 
     # Hashing functions
     'md5': hashing.md5,
@@ -84,6 +87,12 @@ FUNCTION_MAP = {
     'to_number': conversion.to_number,
     'to_string': conversion.to_string,
     'progress': conversion.progress,
+
+    # Result type functions
+    'unwrap_or': result.unwrap_or,
+    'unwrap_or_exit': result.unwrap_or_exit,
+    'failed': result.failed,
+    'succeeded': result.succeeded,
 }
 
 
