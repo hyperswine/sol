@@ -13,7 +13,7 @@ def _import_pyparsing():
     from pyparsing import (
         Word, alphas, alphanums, QuotedString, Optional as PyParsingOptional,
         ZeroOrMore, OneOrMore, Literal, Forward, Group, Keyword, ParseException,
-        Regex, Suppress, LineEnd, nums, oneOf, ParseResults
+        Regex, Suppress, LineEnd, nums, oneOf, ParseResults, FollowedBy
     )
     return {
         'Word': Word, 'alphas': alphas, 'alphanums': alphanums,
@@ -22,7 +22,8 @@ def _import_pyparsing():
         'Literal': Literal, 'Forward': Forward, 'Group': Group,
         'Keyword': Keyword, 'ParseException': ParseException,
         'Regex': Regex, 'Suppress': Suppress, 'LineEnd': LineEnd,
-        'nums': nums, 'oneOf': oneOf, 'ParseResults': ParseResults
+        'nums': nums, 'oneOf': oneOf, 'ParseResults': ParseResults,
+        'FollowedBy': FollowedBy
     }
   except ImportError:
     raise ImportError(
@@ -133,7 +134,13 @@ class SolGrammar:
     """Build the Sol grammar using functional composition"""
     pp = self._pyparsing
 
-    identifier = pp['Word'](pp['alphas'], pp['alphanums'] + "_'")
+    # Reserved keywords that cannot be used as identifiers
+    reserved_keywords = ["if", "then", "else"]
+
+    # Identifier that doesn't match reserved keywords
+    identifier_word = pp['Word'](pp['alphas'], pp['alphanums'] + "_'")
+    identifier = ~pp['Keyword']("if") & ~pp['Keyword']("then") & ~pp['Keyword']("else") & identifier_word
+
     operator = pp['oneOf']("+ - * / < > = ! <= >= == !=")
     function_name = operator | identifier
 
@@ -184,9 +191,8 @@ class SolGrammar:
         base_expr + pp['OneOrMore'](pp['Suppress']("|") + access_key)
     ).setParseAction(lambda t: ("ACCESS", list(t)))
 
-    parenthesized_expr = (
-        pp['Suppress']("(") + function_call + pp['Suppress'](")")
-    ).setParseAction(lambda t: ("PARENTHESIZED", list(t)))
+    # Create Forward for parenthesized_expr to be defined later
+    parenthesized_expr = pp['Forward']()
 
     array_element <<= (dict_literal | array_literal | string_literal | number |
                        access_expr | parenthesized_expr | operator | identifier)
@@ -194,19 +200,54 @@ class SolGrammar:
                     access_expr | parenthesized_expr | operator | identifier)
     base_expr <<= (dict_literal | array_literal | string_literal | number |
                    parenthesized_expr | identifier)
-    argument <<= (access_expr | dict_literal | array_literal | string_literal |
+
+    # Forward declarations for if expressions
+    if_expr = pp['Forward']()
+    pipeline_expr = pp['Forward']()
+
+    argument <<= (if_expr | access_expr | dict_literal | array_literal | string_literal |
                   number | parenthesized_expr | operator | identifier)
 
     function_call <<= function_name + pp['ZeroOrMore'](argument)
 
+    # If expression: if condition then true_expr else false_expr
+    if_keyword = pp['Suppress'](pp['Keyword']("if"))
+    then_keyword = pp['Suppress'](pp['Keyword']("then"))
+    else_keyword = pp['Suppress'](pp['Keyword']("else"))
+
+    # For condition, we need to be careful not to consume 'then' keyword
+    # Use a lookahead to ensure function_call doesn't consume 'then'
+    condition_expr = (
+        access_expr |
+        (function_call + pp['FollowedBy'](then_keyword)) |  # function call must be followed by 'then'
+        dict_literal | array_literal |
+        string_literal | number | parenthesized_expr | identifier
+    )
+    then_expr = pp['Forward']()
+    else_expr = pp['Forward']()
+
+    if_expr <<= (
+        if_keyword + condition_expr + then_keyword + then_expr + else_keyword + else_expr
+    ).setParseAction(lambda t: ("IF_EXPR", [t[0], t[1], t[2]]))  # [condition, then_branch, else_branch]
+
     # Pipeline: value |> function1 |> function2
-    pipeline_expr = (
-        (access_expr | function_call | dict_literal | array_literal |
+    pipeline_expr <<= (
+        (if_expr | access_expr | function_call | dict_literal | array_literal |
          string_literal | number | parenthesized_expr | identifier) +
         pp['OneOrMore'](pp['Literal']("|>") + function_call)
     ).setParseAction(lambda t: ("PIPELINE", list(t)))
 
-    value = (pipeline_expr | access_expr | function_call | dict_literal | array_literal |
+    # Define parenthesized_expr content - try if_expr first since it starts with a keyword
+    parenthesized_expr <<= (
+        pp['Suppress']("(") + (if_expr | pipeline_expr | function_call) + pp['Suppress'](")")
+    ).setParseAction(lambda t: ("PARENTHESIZED", list(t)))    # Allow if expressions in then/else branches and everywhere
+    then_expr <<= (if_expr | pipeline_expr | access_expr | function_call | dict_literal |
+                   array_literal | string_literal | number | parenthesized_expr | identifier)
+    else_expr <<= (if_expr | pipeline_expr | access_expr | function_call | dict_literal |
+                   array_literal | string_literal | number | parenthesized_expr | identifier)
+
+    # Try if_expr first before falling back to other expressions
+    value = (if_expr | pipeline_expr | access_expr | function_call | dict_literal | array_literal |
              string_literal | number | parenthesized_expr | identifier)
 
     equals = pp['Literal']("=")
