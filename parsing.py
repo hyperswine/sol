@@ -135,27 +135,41 @@ class SolGrammar:
     pp = self._pyparsing
 
     # Reserved keywords that cannot be used as identifiers
-    reserved_keywords = ["if", "then", "else"]
+    reserved_keywords = ["if", "then", "else", "raw"]
 
     # Identifier that doesn't match reserved keywords
+    # Use a parse action to explicitly reject reserved keywords
     identifier_word = pp['Word'](pp['alphas'], pp['alphanums'] + "_'")
-    identifier = ~pp['Keyword']("if") & ~pp['Keyword']("then") & ~pp['Keyword']("else") & identifier_word
+
+    def check_not_reserved(tokens):
+        """Ensure the token is not a reserved keyword"""
+        if tokens[0] in reserved_keywords:
+            raise pp['ParseException']("Reserved keyword cannot be used as identifier")
+        return tokens[0]
+
+    identifier = (
+        ~pp['Keyword']("if") & ~pp['Keyword']("then") & ~pp['Keyword']("else") & ~pp['Keyword']("raw") &
+        identifier_word
+    ).setParseAction(check_not_reserved)
 
     operator = pp['oneOf']("+ - * / < > = ! <= >= == !=")
     function_name = operator | identifier
 
-    # F-string support: double quotes with {variable} interpolation
-    # Regular string: single quotes, no interpolation
+    # F-string support: double quotes with {variable} interpolation (e.g., "Hello {name}")
+    # Raw string: raw"" syntax, no interpolation
+
+    # Raw string literal: raw"string content" (must be defined before fstring to match first)
+    raw_keyword = pp['Literal']("raw")
+    raw_string = (raw_keyword + pp['QuotedString']('"', escChar='\\')).setParseAction(
+        lambda t: ("STRING_LITERAL", t[1])  # t[0] is 'raw', t[1] is the string content
+    )
+
     fstring_literal = pp['QuotedString']('"', escChar='\\').setParseAction(
         lambda t: ("FSTRING_LITERAL", t[0])
     )
 
-    regular_string = pp['QuotedString']("'", escChar='\\').setParseAction(
-        lambda t: ("STRING_LITERAL", t[0])
-    )
-
-    # Keep original double-quote for backwards compatibility initially
-    string_literal = fstring_literal | regular_string
+    # Try raw string first, then fall back to fstring
+    string_literal = raw_string | fstring_literal
 
     number = pp['Regex'](r'-?\d+(\.\d+)?').setParseAction(
         lambda t: float(t[0]) if '.' in t[0] else int(t[0])
@@ -231,30 +245,42 @@ class SolGrammar:
     ).setParseAction(lambda t: ("IF_EXPR", [t[0], t[1], t[2]]))  # [condition, then_branch, else_branch]
 
     # Pipeline: value |> function1 |> function2
+    # Try if_expr explicitly first to ensure it's matched before other alternatives
+    # Use | (MatchFirst) to try if_expr before falling back to other options
+    pipeline_non_if_start = access_expr | dict_literal | array_literal | string_literal | number | parenthesized_expr | function_call | identifier
+    pipeline_start = if_expr | pipeline_non_if_start
     pipeline_expr <<= (
-        (if_expr | access_expr | function_call | dict_literal | array_literal |
-         string_literal | number | parenthesized_expr | identifier) +
+        pipeline_start +
         pp['OneOrMore'](pp['Literal']("|>") + function_call)
     ).setParseAction(lambda t: ("PIPELINE", list(t)))
 
     # Define parenthesized_expr content - try if_expr first since it starts with a keyword
     parenthesized_expr <<= (
         pp['Suppress']("(") + (if_expr | pipeline_expr | function_call) + pp['Suppress'](")")
-    ).setParseAction(lambda t: ("PARENTHESIZED", list(t)))    # Allow if expressions in then/else branches and everywhere
-    then_expr <<= (if_expr | pipeline_expr | access_expr | function_call | dict_literal |
-                   array_literal | string_literal | number | parenthesized_expr | identifier)
-    else_expr <<= (if_expr | pipeline_expr | access_expr | function_call | dict_literal |
-                   array_literal | string_literal | number | parenthesized_expr | identifier)
+    ).setParseAction(lambda t: ("PARENTHESIZED", list(t)))
 
-    # Try if_expr first before falling back to other expressions
-    value = (if_expr | pipeline_expr | access_expr | function_call | dict_literal | array_literal |
-             string_literal | number | parenthesized_expr | identifier)
+    # Allow if expressions in then/else branches and everywhere
+    # Note: pipeline_expr is NOT in then/else branches to avoid ambiguity
+    # If you want a pipeline in a branch, use parentheses: if x then (y |> f) else z
+    # Group alternatives to keep multi-token expressions (like function calls) together
+    then_expr_alternatives = if_expr | access_expr | dict_literal | array_literal | string_literal | function_call | number | parenthesized_expr | identifier
+    else_expr_alternatives = if_expr | access_expr | dict_literal | array_literal | string_literal | function_call | number | parenthesized_expr | identifier
+
+    then_expr <<= pp['Group'](then_expr_alternatives)
+    else_expr <<= pp['Group'](else_expr_alternatives)
+
+    # Try pipeline_expr first to handle cases like: if x then y else z |> f
+    # This allows the whole if expression to be part of a pipeline
+    # Try string_literal before function_call to properly handle raw"" syntax
+    value = (pipeline_expr | if_expr | access_expr | dict_literal | array_literal |
+             string_literal | function_call | number | parenthesized_expr | identifier)
 
     equals = pp['Literal']("=")
     lhs = identifier + pp['ZeroOrMore'](identifier)
     assignment = lhs + equals + value
 
-    statement = pp['Group'](assignment | function_call) + pp['Literal'](".")
+    # Allow if expressions, assignments, and function calls as statements
+    statement = pp['Group'](assignment | if_expr | function_call) + pp['Literal'](".")
 
     return statement
 
