@@ -605,12 +605,14 @@ class SolInterpreter:
       results, current_env = acc
       result, new_env = execute_statement(stmt_group, current_env)
 
+      # Always update the global environment with the new environment
+      # This ensures function definitions and variable assignments persist
+      self.environment = new_env
+
       # Handle results functionally
       if isinstance(result, dict):  # Variable assignment
-        # Update global environment
-        self.environment = new_env
         return (results, new_env)
-      else:  # Direct output
+      else:  # Direct output (function definition message or function call result)
         result_str = str(result)
         if print_immediately:
           print(result_str)
