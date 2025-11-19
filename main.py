@@ -44,16 +44,20 @@ def setup_repl_enhancements() -> Optional[Any]:
 
     atexit.register(save_history)
 
-    # Setup tab completion
+    # Setup tab completion first
     setup_tab_completion(readline)
 
-    # Enable vi or emacs mode (defaults to emacs)
-    readline.parse_and_bind('tab: complete')
-
-    # Additional key bindings for better UX
-    readline.parse_and_bind('set editing-mode emacs')
-    readline.parse_and_bind('set show-all-if-ambiguous on')
-    readline.parse_and_bind('set completion-ignore-case on')
+    # Enable tab completion and other key bindings
+    # Check if we're using libedit (macOS) or GNU readline
+    if 'libedit' in str(readline.__doc__):
+      # libedit (macOS) key bindings
+      readline.parse_and_bind('bind ^I rl_complete')
+    else:
+      # GNU readline key bindings
+      readline.parse_and_bind('tab: complete')
+      readline.parse_and_bind('set editing-mode emacs')
+      readline.parse_and_bind('set show-all-if-ambiguous on')
+      readline.parse_and_bind('set completion-ignore-case on')
 
     return readline
 
@@ -99,7 +103,7 @@ def setup_tab_completion(readline) -> None:
 
       try:
         return self.matches[state]
-      except IndexError:
+      except (IndexError, AttributeError):
         return None
 
     def get_function_hints(self, func_name: str) -> str:
@@ -120,9 +124,8 @@ def setup_tab_completion(readline) -> None:
   completer = SolCompleter()
   readline.set_completer(completer.complete)
 
-  # Set completion delimiters
+  # Set completion delimiters (what separates words)
   readline.set_completer_delims(' \t\n=()[]{}|')
-
 
 def print_repl_welcome(debug: bool = False) -> None:
   """Print enhanced REPL welcome message"""
