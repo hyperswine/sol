@@ -264,6 +264,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pyrsistent"
+version = "0.20.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ce/3a/5031723c09068e9c8c2f0bc25c3a9245f2b1d1aea8396c787a408f2b95ca/pyrsistent-0.20.0.tar.gz", hash = "sha256:4c48f78f62ab596c679086084d0dd13254ae4f3d6c72a83ffdf5ebdef8f265a4", size = 103642, upload-time = "2023-10-25T21:06:56.342Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/88/0acd180010aaed4987c85700b7cc17f9505f3edb4e5873e4dc67f613e338/pyrsistent-0.20.0-py3-none-any.whl", hash = "sha256:c55acc4733aad6560a7f5f818466631f07efc001fd023f34a6c203f8b6df0f0b", size = 58106, upload-time = "2023-10-25T21:06:54.387Z" },
+]
+
+[[package]]
 name = "python-nmap"
 version = "0.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -336,6 +345,7 @@ dependencies = [
     { name = "pygments" },
     { name = "pyinstaller" },
     { name = "pyparsing" },
+    { name = "pyrsistent" },
     { name = "python-nmap" },
     { name = "requests" },
     { name = "rich" },
@@ -352,6 +362,7 @@ requires-dist = [
     { name = "pygments", specifier = ">=2.19.2" },
     { name = "pyinstaller", specifier = ">=6.14.2" },
     { name = "pyparsing", specifier = ">=3.2.3" },
+    { name = "pyrsistent", specifier = ">=0.20.0" },
     { name = "python-nmap", specifier = ">=0.7.1" },
     { name = "requests", specifier = ">=2.32.4" },
     { name = "rich", specifier = ">=14.0.0" },
