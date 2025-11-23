@@ -675,6 +675,16 @@ def execute_statement(stmt: Any, env: Environment) -> Tuple[Union[str, Dict[str,
   else:
     stmt_content = stmt
 
+  # Check if stmt_content contains a single IF_EXPR (unwrap if needed)
+  actual_content = stmt_content
+  if hasattr(stmt_content, '__len__') and len(stmt_content) == 1:
+    actual_content = stmt_content[0]
+
+  # Check if it's an if expression
+  if isinstance(actual_content, tuple) and actual_content[0] == "IF_EXPR":
+    result, new_env = process_if_expression(actual_content[1], env)
+    return result, new_env
+
   # Convert to list for easier handling
   stmt_list = list(stmt_content)
 

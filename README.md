@@ -74,6 +74,12 @@ age = 30.
 echo "Hello, {name}! You are {age} years old.".
 ```
 
+For raw strings without interpolation, use the `raw""` prefix:
+```sol
+template = raw"Use {variable} as a placeholder".
+echo template.  # Output: Use {variable} as a placeholder
+```
+
 ### ✅ Result Types
 Rust-inspired error handling without exceptions:
 ```sol

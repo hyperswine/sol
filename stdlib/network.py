@@ -1,8 +1,9 @@
 """
 Sol Standard Library - Network Operations Module
-Provides HTTP requests and network scanning functionality.
+Provides HTTP requests and network scanning functionality with progress support.
 """
 import subprocess
+import sys
 from typing import Any, Dict, Optional
 from toolz import curry
 
@@ -27,13 +28,68 @@ def _import_nmap():
             "python-nmap library not found. Install with: pip install python-nmap")
 
 
+def _download_with_progress(url: str, show_progress: bool = False) -> str:
+    """
+    Download with optional progress bar support.
+
+    Args:
+        url: URL to download from
+        show_progress: Whether to show progress bar
+
+    Returns:
+        Downloaded content as string
+    """
+    requests = _import_requests()
+
+    response = requests.get(url, stream=True, timeout=30)
+    response.raise_for_status()
+
+    # Get total size if available
+    total_size = int(response.headers.get('content-length', 0))
+
+    if show_progress and total_size > 0:
+        # Import ProgressBar locally to avoid circular dependency
+        from stdlib.conversion import ProgressBar
+
+        progress_bar = ProgressBar(total=total_size, width=40, desc="Downloading")
+
+        chunks = []
+        downloaded = 0
+
+        # Download in chunks
+        chunk_size = 8192
+        for chunk in response.iter_content(chunk_size=chunk_size):
+            if chunk:
+                chunks.append(chunk)
+                downloaded += len(chunk)
+                progress_bar.set_progress(downloaded)
+
+        progress_bar.finish()
+
+        # Decode content
+        content = b''.join(chunks).decode('utf-8', errors='ignore')
+        return content
+    else:
+        # For small files or when no content-length, just download directly
+        if show_progress:
+            # Show quick progress animation
+            from stdlib.conversion import ProgressBar
+            progress_bar = ProgressBar(total=10, desc="Downloading")
+            for i in range(11):
+                progress_bar.set_progress(i)
+            progress_bar.finish()
+
+        return response.text
+
+
 @curry
-def wget(url: str) -> str:
+def wget(url: str, with_progress: bool = False) -> str:
     """
     Download content from URL via HTTP GET.
 
     Args:
         url: URL to download from
+        with_progress: Show progress bar (default: False)
 
     Returns:
         Response body as string or error message
@@ -42,27 +98,29 @@ def wget(url: str) -> str:
         >>> wget("https://api.github.com/zen")
         "Design for failure."
 
+        >>> wget("https://example.com/file.txt", True)
+        Downloading: [========================================] 100%
+        "file content..."
+
     Errors:
         - ConnectionError: Network unreachable
         - Timeout: Request took too long
         - HTTPError: Non-2xx status code
     """
     try:
-        requests = _import_requests()
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        return response.text
+        return _download_with_progress(url, show_progress=with_progress)
     except Exception as e:
         return f"Error downloading from {url}: {e}"
 
 
 @curry
-def get(url: str) -> str:
+def get(url: str, with_progress: bool = False) -> str:
     """
     Make HTTP GET request (alias for wget).
 
     Args:
         url: URL to request
+        with_progress: Show progress bar (default: False)
 
     Returns:
         Response body as string or error message
@@ -76,7 +134,7 @@ def get(url: str) -> str:
         - Timeout: Request took too long
         - HTTPError: Non-2xx status code
     """
-    return wget(url)
+    return wget(url, with_progress)
 
 
 @curry

@@ -107,7 +107,7 @@ as well as f-strings python like. Only works for vars so you cant do arbitrary e
 myvar = myrecord|thing|anotherthing.
 echo "this is myvar = {myvar}".
 
-use "" for f-strings and '' for regular strings.
+use "" for f-strings and raw"" for raw strings (no interpolation).
 
 Full example
 
@@ -144,3 +144,7 @@ can be used anywhere like
 x = 1.
 if x == 1 then echo "hi" else echo "bye".
 y = if x == 1 then (x |> + 2) else (+ x 4).
+
+-----------
+
+Instead of '' for raw strings, use raw"" (IMPLEMENTED ✓)
