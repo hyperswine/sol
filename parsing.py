@@ -279,8 +279,8 @@ class SolGrammar:
     lhs = identifier + pp['ZeroOrMore'](identifier)
     assignment = lhs + equals + value
 
-    # Allow if expressions, assignments, and function calls as statements
-    statement = pp['Group'](assignment | if_expr | function_call) + pp['Literal'](".")
+    # Allow if expressions, pipeline expressions, assignments, and function calls as statements
+    statement = pp['Group'](assignment | if_expr | pipeline_expr | function_call) + pp['Literal'](".")
 
     return statement
 

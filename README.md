@@ -59,14 +59,14 @@ echo content.
 
 ## What's New in Sol 1.0
 
-### 🚀 Pipeline Operator (`|>`)
+### Pipeline Operator (`|>`)
 Chain operations left-to-right for readable data transformations:
 ```sol
 [1, 2, 3, 4, 5] |> map (* 2) |> filter (> 5) |> fold + 0 |> echo.
 getenv "HOME" |> unwrap_or "/tmp" |> echo.
 ```
 
-### 📝 F-String Interpolation
+### F-String Interpolation
 Python-style variable interpolation in double-quoted strings:
 ```sol
 name = "Alice".
@@ -80,7 +80,7 @@ template = raw"Use {variable} as a placeholder".
 echo template.  # Output: Use {variable} as a placeholder
 ```
 
-### ✅ Result Types
+### Result Types
 Rust-inspired error handling without exceptions:
 ```sol
 # Safe environment variable access
@@ -91,7 +91,7 @@ result = sh "ls -la".
 output = result |> unwrap_or "Command failed".
 ```
 
-### 🔧 Shell Integration
+### Shell Integration
 Execute shell commands with proper error handling:
 ```sol
 sh "git status" |> unwrap_or "Not a git repo" |> echo.
@@ -1067,16 +1067,3 @@ Options:
 python run_tests.py -v           # Verbose output
 python run_tests.py -f           # Fail fast (stop on first failure)
 ```
-
-### Test Coverage
-
-The test suite includes:
-- ✅ Result types (`unwrap_or`, `unwrap_or_exit`, `failed`, `succeeded`)
-- ✅ Pipeline operator (`|>`)
-- ✅ F-string interpolation
-- ✅ REPL function persistence
-- ✅ REPL variable persistence
-- ✅ Core language features
-- ✅ Standard library functions
-
-For more details, see [`tests/README.md`](tests/README.md).

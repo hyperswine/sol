@@ -613,7 +613,8 @@ def _execute_builtin_function(func_name: str, func: Callable, processed_args: Li
           # Normal case: map(func, array)
           return func(*processed_args), env
       else:
-        return func(*processed_args), env    # fold takes 2 args before the data: fold func initial
+        # fold takes 2 args before the data: fold func initial
+        return func(*processed_args), env
     # When used as "fold + 0", we want to return a partial that waits for the array
     # fold is curried as fold(func, iterable, initial), so we need to reorder
     elif func_name == 'fold':
@@ -629,13 +630,16 @@ def _execute_builtin_function(func_name: str, func: Callable, processed_args: Li
           # Pipeline case: fold(array, func) -> partial waiting for initial
           iterable_arg = processed_args[0]
           func_arg = processed_args[1]
-          partial_fold = lambda initial: func(func_arg, iterable_arg, initial)
+
+          def partial_fold(initial): return func(
+              func_arg, iterable_arg, initial)
           return partial_fold, env
         else:
           # Normal case: fold(func, initial) -> partial waiting for iterable
           func_arg = processed_args[0]
           initial_arg = processed_args[1]
-          partial_fold = lambda iterable: func(func_arg, iterable, initial_arg)
+          def partial_fold(iterable): return func(
+              func_arg, iterable, initial_arg)
           return partial_fold, env
       elif len(processed_args) == 3:
         # Could be:
@@ -683,6 +687,11 @@ def execute_statement(stmt: Any, env: Environment) -> Tuple[Union[str, Dict[str,
   # Check if it's an if expression
   if isinstance(actual_content, tuple) and actual_content[0] == "IF_EXPR":
     result, new_env = process_if_expression(actual_content[1], env)
+    return result, new_env
+
+  # Check if it's a standalone pipeline expression
+  if isinstance(actual_content, tuple) and actual_content[0] == "PIPELINE":
+    result, new_env = process_pipeline(actual_content[1], env)
     return result, new_env
 
   # Convert to list for easier handling
@@ -826,9 +835,9 @@ class SolInterpreter:
 
     # Use functional reduce to process all statements
     final_results, final_env = reduce(
-      execute_and_accumulate,
-      statement_groups,
-      ([], self.environment)
+        execute_and_accumulate,
+        statement_groups,
+        ([], self.environment)
     )
 
     return final_results, dict(final_env.variables)  # Convert PMap to dict
@@ -882,4 +891,3 @@ def get_cache_info() -> Dict[str, Any]:
 def clear_caches() -> None:
   """Clear all LRU caches - useful for testing or memory management"""
   _parse_number.cache_clear()
-
