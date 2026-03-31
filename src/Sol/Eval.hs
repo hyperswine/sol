@@ -26,8 +26,8 @@ import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist,
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath (takeDirectory, takeExtension, takeFileName, (</>))
-import System.IO (hPutStrLn, stderr)
-import System.Process (readProcessWithExitCode)
+import System.IO (hGetContents, hPutStrLn, hSetBuffering, stderr, BufferMode(..))
+import System.Process (readProcessWithExitCode, createProcess, proc, std_err, std_out, StdStream(..), waitForProcess)
 
 -- ============================================================
 -- Evaluator
@@ -256,7 +256,7 @@ initialEnv =
       builtin "read" 1 bReadFile,
       builtin "write" 2 bWriteFile,
       builtin "cp" 2 bCp,
-      builtin "ls" 1 bLs,
+      builtin "ls" (-1) bLs,
       builtin "mkdir" 1 bMkdir,
       builtin "rm" 1 bRm,
       builtin "exists" 1 bExists,
@@ -576,12 +576,13 @@ bCp _ [_, v] = solError ("cp: expected destination path string, got " ++ typeNam
 bCp _ _ = solError "cp: expected source and destination paths"
 
 bLs :: Env -> [SolVal] -> IO SolVal
+bLs _ [] = SList . map SStr <$> listDirectory "."
 bLs _ [SStr path] = do
   ok <- doesDirectoryExist path
   if ok
     then SList . map SStr <$> listDirectory path
     else solError ("ls: directory not found: " ++ path)
-bLs _ _ = solError "ls: expected a path string"
+bLs _ _ = solError "ls: expected an optional path string"
 
 bMkdir :: Env -> [SolVal] -> IO SolVal
 bMkdir _ [SStr path] = createDirectoryIfMissing True path >> return SNull
@@ -755,13 +756,21 @@ bWget _ [SStr url] = do
     ExitSuccess -> return (SStr out)
     _ -> solError ("wget: curl failed: " ++ trim err)
 bWget _ [SStr url, progress] = do
-  let args = if isTruthy progress
-               then ["-L", "--progress-bar", url]
-               else ["-s", "-L", url]
-  (ec, out, err) <- readProcessWithExitCode "curl" args ""
-  case ec of
-    ExitSuccess -> return (SStr out)
-    _ -> solError ("wget: curl failed: " ++ trim err)
+  let showBar = isTruthy progress
+  if showBar
+    then do
+      -- Inherit stderr so curl's progress bar renders on the terminal
+      (_, Just hOut, _, ph) <- createProcess
+        (proc "curl" ["-L", "--progress-bar", url])
+          { std_out = CreatePipe, std_err = Inherit }
+      out <- hGetContents hOut
+      _ <- length out `seq` waitForProcess ph
+      return (SStr out)
+    else do
+      (ec, out, err) <- readProcessWithExitCode "curl" ["-s", "-L", url] ""
+      case ec of
+        ExitSuccess -> return (SStr out)
+        _ -> solError ("wget: curl failed: " ++ trim err)
 bWget _ [v] = solError ("wget: expected URL string, got " ++ typeName v)
 bWget _ _ = solError "wget: expected url [progress]"
 
@@ -783,8 +792,11 @@ bProgress env (SBuiltin "cp" _ impl : [SStr src, SStr dst]) = do
   case hasPv of
     Just _ -> do
       fsize <- getFileSize src
-      (ec, _, _) <- readProcessWithExitCode "pv"
-                      ["-s", show fsize, "-o", dst, src] ""
+      -- Inherit stderr so pv's progress bar renders on the terminal
+      (_, _, _, ph) <- createProcess
+        (proc "pv" ["-s", show fsize, "-o", dst, src])
+          { std_err = Inherit }
+      ec <- waitForProcess ph
       case ec of
         ExitSuccess -> return SNull
         _ -> do

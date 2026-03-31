@@ -9,7 +9,7 @@ mkdir "example_dir".
 
 # Show current directory contents
 echo "Current directory contents:".
-files = ls.
+files = ls ".".
 echo files.
 
 # Create a test file
