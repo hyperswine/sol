@@ -1,6 +1,2 @@
-docs/.DS_Store
-__pycache__
-example_dir
-*report.xml
-dist/
-bin/
+.stack-work/
+*~
