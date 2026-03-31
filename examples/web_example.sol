@@ -6,7 +6,7 @@ echo "=== Web Utilities Example ===".
 
 # Make a simple GET request
 echo "Making GET request to httpbin.org...".
-response = get "https://httpbin.org/get".
+response = progress wget "https://httpbin.org/get".
 echo "Response received!".
 echo response.
 

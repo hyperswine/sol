@@ -22,7 +22,7 @@ import Data.Maybe (fromMaybe)
 import Data.Ord (comparing)
 import Sol.Syntax
 import Sol.Value
-import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getCurrentDirectory, listDirectory, removeDirectoryRecursive, removeFile)
+import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, getCurrentDirectory, getFileSize, listDirectory, removeDirectoryRecursive, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath (takeDirectory, takeExtension, takeFileName, (</>))
@@ -50,7 +50,7 @@ evalExpr env (EDict pairs) = do
 
 -- Variable lookup: 0-arity builtins are auto-called; unknown names → SStr
 evalExpr env (EVar name) = case Map.lookup name env of
-  Just (SBuiltin 0 impl) -> impl env []
+  Just (SBuiltin _ 0 impl) -> impl env []
   Just v -> return v
   Nothing -> return (SStr name)
 evalExpr env (EAccess base keys) = do
@@ -98,8 +98,8 @@ apply env (SFun params body) args
     need = length params
 
 -- Built-in function
-apply env (SBuiltin arity impl) args
-  | arity >= 0 && length args < arity = return (SPartial (SBuiltin arity impl) args)
+apply env (SBuiltin n arity impl) args
+  | arity >= 0 && length args < arity = return (SPartial (SBuiltin n arity impl) args)
   | otherwise = impl env args
 apply _ fn args = solError ("cannot apply " ++ showVal fn ++ " to " ++ show (length args) ++ " arguments")
 
@@ -181,7 +181,7 @@ solError msg = ioError (userError ("[sol] " ++ msg))
 
 -- | Smart constructor for a fixed-arity builtin
 builtin :: String -> Int -> (Env -> [SolVal] -> IO SolVal) -> (String, SolVal)
-builtin name arity impl = (name, SBuiltin arity impl)
+builtin name arity impl = (name, SBuiltin name arity impl)
 
 -- | All built-ins; loaded into the initial environment
 initialEnv :: Env
@@ -255,6 +255,7 @@ initialEnv =
       -- Filesystem
       builtin "read" 1 bReadFile,
       builtin "write" 2 bWriteFile,
+      builtin "cp" 2 bCp,
       builtin "ls" 1 bLs,
       builtin "mkdir" 1 bMkdir,
       builtin "rm" 1 bRm,
@@ -290,10 +291,9 @@ initialEnv =
       builtin "csvread" 1 bCsvRead,
       builtin "csvwrite" 2 bCsvWrite,
       -- HTTP (via curl)
-      builtin "wget" 1 bWget,
-      builtin "get" 1 bWget,
-      -- Progress (pass-through; a real progress bar would need more IO)
-      builtin "progress" 1 (\env_ [v] -> applyBuiltin env_ v),
+      builtin "wget" (-1) bWget,
+      builtin "get" (-1) bWget,
+      builtin "progress" (-1) bProgress,
       -- Miscellaneous
       builtin "type" 1 (\_ [v] -> return (SStr (typeName v))),
       builtin "place" 2 bPlace
@@ -301,7 +301,7 @@ initialEnv =
   where
     -- exit has two forms: exit (code 0) and exit n
     -- Override the 0-arity with the correct implementation
-    applyBuiltin env_ (SBuiltin 0 impl) = impl env_ []
+    applyBuiltin env_ (SBuiltin _ 0 impl) = impl env_ []
     applyBuiltin _ v = return v
 
 -- ============================================================
@@ -569,6 +569,12 @@ bWriteFile _ [SStr path, v] = writeFile path (showVal v) >> return SNull
 bWriteFile _ [v, _] = solError ("write: expected path string, got " ++ typeName v)
 bWriteFile _ _ = solError "write: expected path and content"
 
+bCp :: Env -> [SolVal] -> IO SolVal
+bCp _ [SStr src, SStr dst] = copyFile src dst >> return SNull
+bCp _ [v, _] = solError ("cp: expected source path string, got " ++ typeName v)
+bCp _ [_, v] = solError ("cp: expected destination path string, got " ++ typeName v)
+bCp _ _ = solError "cp: expected source and destination paths"
+
 bLs :: Env -> [SolVal] -> IO SolVal
 bLs _ [SStr path] = do
   ok <- doesDirectoryExist path
@@ -748,8 +754,54 @@ bWget _ [SStr url] = do
   case ec of
     ExitSuccess -> return (SStr out)
     _ -> solError ("wget: curl failed: " ++ trim err)
+bWget _ [SStr url, progress] = do
+  let args = if isTruthy progress
+               then ["-L", "--progress-bar", url]
+               else ["-s", "-L", url]
+  (ec, out, err) <- readProcessWithExitCode "curl" args ""
+  case ec of
+    ExitSuccess -> return (SStr out)
+    _ -> solError ("wget: curl failed: " ++ trim err)
 bWget _ [v] = solError ("wget: expected URL string, got " ++ typeName v)
-bWget _ _ = solError "wget: expected one argument"
+bWget _ _ = solError "wget: expected url [progress]"
+
+-- Progress wrapper
+
+isCallable :: SolVal -> Bool
+isCallable (SBuiltin _ _ _) = True
+isCallable (SFun _ _)       = True
+isCallable (SPartial _ _)   = True
+isCallable _                = False
+
+bProgress :: Env -> [SolVal] -> IO SolVal
+-- wget: enable curl --progress-bar (progress goes to stderr, result is stdout)
+bProgress env (SBuiltin "wget" _ impl : args) =
+  impl env (args ++ [SBool True])
+-- cp: use pv for known-size progress, fallback to copyFile with a warning
+bProgress env (SBuiltin "cp" _ impl : [SStr src, SStr dst]) = do
+  hasPv <- findExecutable "pv"
+  case hasPv of
+    Just _ -> do
+      fsize <- getFileSize src
+      (ec, _, _) <- readProcessWithExitCode "pv"
+                      ["-s", show fsize, "-o", dst, src] ""
+      case ec of
+        ExitSuccess -> return SNull
+        _ -> do
+          hPutStrLn stderr "[sol] pv failed, falling back to plain copy"
+          copyFile src dst >> return SNull
+    Nothing -> do
+      hPutStrLn stderr "Might take a while..."
+      impl env [SStr src, SStr dst]
+-- Generic callable with args: warn then call
+bProgress env (f : args) | isCallable f = do
+  hPutStrLn stderr "Might take a while..."
+  apply env f args
+-- Already-evaluated single value (e.g. progress (cp "a" "b") with parens): passthrough
+bProgress _ [v] = return v
+-- Non-callable with extra args (user error)
+bProgress _ (v : _) = solError ("progress: expected a function, got " ++ typeName v)
+bProgress _ [] = solError "progress: expected at least one argument"
 
 -- ============================================================
 -- Minimal JSON parser (no external dependency)
@@ -859,7 +911,7 @@ typeName SNull = "null"
 typeName (SList _) = "list"
 typeName (SDict _) = "dict"
 typeName (SFun _ _) = "function"
-typeName (SBuiltin _ _) = "function"
+typeName (SBuiltin _ _ _) = "function"
 typeName (SPartial _ _) = "function"
 
 -- Needed for bSort (Key ordering)

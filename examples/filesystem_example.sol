@@ -21,4 +21,6 @@ echo "Reading the file:".
 content = read "example_dir/test.txt".
 echo content.
 
-echo "=== End Example ===".
+# echo "=== End Example ===".
+
+progress cp "examples/simple.sol" "examples/simple2.sol".

@@ -22,7 +22,7 @@ data SolVal
   | -- | Built-in function with fixed arity (-1 = variadic) and IO implementation.
     --   The Env argument lets higher-order builtins (map, filter, fold) call
     --   back into the interpreter via 'apply'.
-    SBuiltin Int (Env -> [SolVal] -> IO SolVal)
+    SBuiltin String Int (Env -> [SolVal] -> IO SolVal)
   | -- | Partially applied function: base fn + accumulated args so far
     SPartial SolVal [SolVal]
 
@@ -44,7 +44,7 @@ showVal (SDict m) = "{" ++ intercalate ", " (map pair (Map.toList m)) ++ "}"
   where
     pair (k, v) = show k ++ ": " ++ showRepr v
 showVal (SFun ps _) = "<function(" ++ intercalate ", " ps ++ ")>"
-showVal (SBuiltin _ _) = "<builtin>"
+showVal (SBuiltin n _ _) = "<builtin:" ++ n ++ ">"
 showVal (SPartial f _) = "<partial " ++ showVal f ++ ">"
 
 -- | Show with quotes for strings (used inside containers)
