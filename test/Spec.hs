@@ -14,8 +14,7 @@ import Sol.Syntax
 import Sol.Value
 import System.Exit (exitFailure)
 
--- Orphan Show instance so Hedgehog can display counterexamples.
--- SBuiltin / SFun are shown via showVal (e.g. "<builtin>").
+-- Orphan Show instance so Hedgehog can display counterexamples. SBuiltin / SFun are shown via showVal (e.g. "<builtin>").
 instance Show SolVal where
   show = showVal
 
@@ -115,7 +114,7 @@ prop_parse_integer_literal = property $ do
   let prog = show n ++ "."
   case parseProgram prog of
     Right [SExpr (ENum v)] -> v === fromIntegral n
-    _                      -> failure
+    _ -> failure
 
 prop_parse_raw_string :: Property
 prop_parse_raw_string = property $ do
@@ -123,7 +122,7 @@ prop_parse_raw_string = property $ do
   let prog = "raw\"" ++ s ++ "\"."
   case parseProgram prog of
     Right [SExpr (EStr v)] -> v === s
-    _                      -> failure
+    _ -> failure
 
 prop_parse_fstring :: Property
 prop_parse_fstring = property $ do
@@ -131,49 +130,49 @@ prop_parse_fstring = property $ do
   let prog = "\"" ++ s ++ "\"."
   case parseProgram prog of
     Right [SExpr (EFStr v)] -> v === s
-    _                       -> failure
+    _ -> failure
 
 prop_parse_empty_list :: Property
 prop_parse_empty_list = property $
   case parseProgram "[]." of
     Right [SExpr (EList [])] -> success
-    _                        -> failure
+    _ -> failure
 
 prop_parse_list :: Property
 prop_parse_list = property $
   case parseProgram "[1, 2, 3]." of
     Right [SExpr (EList [ENum 1, ENum 2, ENum 3])] -> success
-    _                                               -> failure
+    _ -> failure
 
 prop_parse_dict :: Property
 prop_parse_dict = property $
   case parseProgram "{a: 1, b: 2}." of
     Right [SExpr (EDict _)] -> success
-    _                       -> failure
+    _ -> failure
 
 prop_parse_assign_var :: Property
 prop_parse_assign_var = property $
   case parseProgram "x = 42." of
     Right [SAssign "x" [] (ENum 42)] -> success
-    _                                -> failure
+    _ -> failure
 
 prop_parse_function_def :: Property
 prop_parse_function_def = property $
   case parseProgram "double x = * x 2." of
     Right [SAssign "double" ["x"] _] -> success
-    _                                -> failure
+    _ -> failure
 
 prop_parse_if_expr :: Property
 prop_parse_if_expr = property $
   case parseProgram "if true then 1 else 2." of
     Right [SExpr (EIf _ _ _)] -> success
-    _                         -> failure
+    _ -> failure
 
 prop_parse_pipeline :: Property
 prop_parse_pipeline = property $
   case parseProgram "[1, 2, 3] |> len." of
     Right [SExpr (EPipe _ _)] -> success
-    _                         -> failure
+    _ -> failure
 
 prop_parse_multiple_stmts :: Property
 prop_parse_multiple_stmts = property $ do
@@ -181,7 +180,7 @@ prop_parse_multiple_stmts = property $ do
   let prog = "x = " ++ show n ++ ".\ny = " ++ show n ++ "."
   case parseProgram prog of
     Right [SAssign "x" [] _, SAssign "y" [] _] -> success
-    _                                           -> failure
+    _ -> failure
 
 -- ===================================================================
 -- Eval: arithmetic
@@ -268,7 +267,7 @@ prop_eval_eq_neq_complement = property $ do
   rne <- evalIO $ apply initialEnv (initialEnv Map.! "!=") [SNum a, SNum b]
   case (req, rne) of
     (SBool e, SBool ne) -> e === not ne
-    _                   -> failure
+    _ -> failure
 
 -- ===================================================================
 -- Eval: boolean logic
@@ -320,7 +319,7 @@ prop_eval_append_increases_len = property $ do
   r <- evalIO $ apply initialEnv (initialEnv Map.! "append") [list, SNum 99]
   case r of
     SList ys -> length ys === length xs + 1
-    _        -> failure
+    _ -> failure
 
 prop_eval_prepend_increases_len :: Property
 prop_eval_prepend_increases_len = property $ do
@@ -329,24 +328,24 @@ prop_eval_prepend_increases_len = property $ do
   r <- evalIO $ apply initialEnv (initialEnv Map.! "prepend") [SNum 99, list]
   case r of
     SList ys -> length ys === length xs + 1
-    _        -> failure
+    _ -> failure
 
 prop_eval_head_of_prepend :: Property
 prop_eval_head_of_prepend = property $ do
-  x  <- forAll genFiniteDouble
+  x <- forAll genFiniteDouble
   xs <- forAll $ Gen.list (Range.linear 0 5) genFiniteDouble
   let list = SList (map SNum xs)
   prepended <- evalIO $ apply initialEnv (initialEnv Map.! "prepend") [SNum x, list]
-  h          <- evalIO $ apply initialEnv (initialEnv Map.! "head")    [prepended]
+  h <- evalIO $ apply initialEnv (initialEnv Map.! "head") [prepended]
   h === SNum x
 
 prop_eval_tail_of_prepend :: Property
 prop_eval_tail_of_prepend = property $ do
-  x  <- forAll genFiniteDouble
+  x <- forAll genFiniteDouble
   xs <- forAll $ Gen.list (Range.linear 0 5) genFiniteDouble
   let list = SList (map SNum xs)
   prepended <- evalIO $ apply initialEnv (initialEnv Map.! "prepend") [SNum x, list]
-  t          <- evalIO $ apply initialEnv (initialEnv Map.! "tail")    [prepended]
+  t <- evalIO $ apply initialEnv (initialEnv Map.! "tail") [prepended]
   t === list
 
 prop_eval_reverse_involution :: Property
@@ -359,7 +358,7 @@ prop_eval_reverse_involution = property $ do
 
 prop_eval_str_reverse_involution :: Property
 prop_eval_str_reverse_involution = property $ do
-  s  <- forAll $ Gen.string (Range.linear 0 20) Gen.alphaNum
+  s <- forAll $ Gen.string (Range.linear 0 20) Gen.alphaNum
   r1 <- evalIO $ apply initialEnv (initialEnv Map.! "reverse") [SStr s]
   r2 <- evalIO $ apply initialEnv (initialEnv Map.! "reverse") [r1]
   r2 === SStr s
@@ -368,11 +367,15 @@ prop_eval_concat_len :: Property
 prop_eval_concat_len = property $ do
   xs <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
   ys <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
-  r  <- evalIO $ apply initialEnv (initialEnv Map.! "concat")
-                   [SList (map SNum xs), SList (map SNum ys)]
+  r <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "concat")
+        [SList (map SNum xs), SList (map SNum ys)]
   case r of
     SList zs -> length zs === length xs + length ys
-    _        -> failure
+    _ -> failure
 
 prop_eval_sort_idempotent :: Property
 prop_eval_sort_idempotent = property $ do
@@ -387,45 +390,60 @@ prop_eval_range_length = property $ do
   a <- forAll $ Gen.int (Range.linear 0 50)
   n <- forAll $ Gen.int (Range.linear 0 20)
   let b = a + n
-  r <- evalIO $ apply initialEnv (initialEnv Map.! "range")
-                  [SNum (fromIntegral a), SNum (fromIntegral b)]
+  r <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "range")
+        [SNum (fromIntegral a), SNum (fromIntegral b)]
   case r of
     SList ys -> length ys === n
-    _        -> failure
+    _ -> failure
 
 prop_eval_range_values :: Property
 prop_eval_range_values = property $ do
   a <- forAll $ Gen.int (Range.linear 0 20)
   n <- forAll $ Gen.int (Range.linear 0 10)
   let b = a + n
-  r <- evalIO $ apply initialEnv (initialEnv Map.! "range")
-                  [SNum (fromIntegral a), SNum (fromIntegral b)]
+  r <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "range")
+        [SNum (fromIntegral a), SNum (fromIntegral b)]
   r === SList [SNum (fromIntegral i) | i <- [a .. b - 1]]
 
 prop_eval_zip_length :: Property
 prop_eval_zip_length = property $ do
   xs <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
   ys <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
-  r  <- evalIO $ apply initialEnv (initialEnv Map.! "zip")
-                   [SList (map SNum xs), SList (map SNum ys)]
+  r <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "zip")
+        [SList (map SNum xs), SList (map SNum ys)]
   case r of
     SList zs -> length zs === min (length xs) (length ys)
-    _        -> failure
+    _ -> failure
 
 prop_eval_flatten_length :: Property
 prop_eval_flatten_length = property $ do
-  rows <- forAll $ Gen.list (Range.linear 0 5)
-                     (Gen.list (Range.linear 0 5) genFiniteDouble)
+  rows <-
+    forAll $
+      Gen.list
+        (Range.linear 0 5)
+        (Gen.list (Range.linear 0 5) genFiniteDouble)
   let nested = SList (map (\row -> SList (map SNum row)) rows)
   r <- evalIO $ apply initialEnv (initialEnv Map.! "flatten") [nested]
   case r of
     SList ys -> length ys === sum (map length rows)
-    _        -> failure
+    _ -> failure
 
 prop_eval_len_list :: Property
 prop_eval_len_list = property $ do
   xs <- forAll $ Gen.list (Range.linear 0 20) genFiniteDouble
-  r  <- evalIO $ apply initialEnv (initialEnv Map.! "len") [SList (map SNum xs)]
+  r <- evalIO $ apply initialEnv (initialEnv Map.! "len") [SList (map SNum xs)]
   r === SNum (fromIntegral (length xs))
 
 prop_eval_len_string :: Property
@@ -436,10 +454,14 @@ prop_eval_len_string = property $ do
 
 prop_eval_contains_member :: Property
 prop_eval_contains_member = property $ do
-  x    <- forAll genFiniteDouble
+  x <- forAll genFiniteDouble
   rest <- forAll $ Gen.list (Range.linear 0 5) genFiniteDouble
-  r    <- evalIO $ apply initialEnv (initialEnv Map.! "contains")
-                     [SList (map SNum (x : rest)), SNum x]
+  r <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "contains")
+        [SList (map SNum (x : rest)), SNum x]
   r === SBool True
 
 prop_eval_contains_str_substr :: Property
@@ -447,8 +469,12 @@ prop_eval_contains_str_substr = property $ do
   pre <- forAll $ Gen.string (Range.linear 0 5) Gen.alphaNum
   mid <- forAll $ Gen.string (Range.linear 1 5) Gen.alphaNum
   suf <- forAll $ Gen.string (Range.linear 0 5) Gen.alphaNum
-  r   <- evalIO $ apply initialEnv (initialEnv Map.! "contains")
-                    [SStr (pre ++ mid ++ suf), SStr mid]
+  r <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "contains")
+        [SStr (pre ++ mid ++ suf), SStr mid]
   r === SBool True
 
 -- ===================================================================
@@ -457,14 +483,14 @@ prop_eval_contains_str_substr = property $ do
 
 prop_eval_upper_idempotent :: Property
 prop_eval_upper_idempotent = property $ do
-  s  <- forAll $ Gen.string (Range.linear 0 20) Gen.alphaNum
+  s <- forAll $ Gen.string (Range.linear 0 20) Gen.alphaNum
   r1 <- evalIO $ apply initialEnv (initialEnv Map.! "upper") [SStr s]
   r2 <- evalIO $ apply initialEnv (initialEnv Map.! "upper") [r1]
   r1 === r2
 
 prop_eval_lower_idempotent :: Property
 prop_eval_lower_idempotent = property $ do
-  s  <- forAll $ Gen.string (Range.linear 0 20) Gen.alphaNum
+  s <- forAll $ Gen.string (Range.linear 0 20) Gen.alphaNum
   r1 <- evalIO $ apply initialEnv (initialEnv Map.! "lower") [SStr s]
   r2 <- evalIO $ apply initialEnv (initialEnv Map.! "lower") [r1]
   r1 === r2
@@ -483,16 +509,19 @@ prop_eval_str_concat_empty_left = property $ do
 
 prop_eval_split_join_roundtrip :: Property
 prop_eval_split_join_roundtrip = property $ do
-  ws <- forAll $ Gen.list (Range.linear 1 5)
-                   (Gen.string (Range.linear 1 5) Gen.alphaNum)
-  let sep    = ","
+  ws <-
+    forAll $
+      Gen.list
+        (Range.linear 1 5)
+        (Gen.string (Range.linear 1 5) Gen.alphaNum)
+  let sep = ","
       joined = intercalate sep ws
   r <- evalIO $ apply initialEnv (initialEnv Map.! "split") [SStr sep, SStr joined]
   r === SList (map SStr ws)
 
 prop_eval_trim_idempotent :: Property
 prop_eval_trim_idempotent = property $ do
-  s  <- forAll $ Gen.string (Range.linear 0 10) Gen.alphaNum
+  s <- forAll $ Gen.string (Range.linear 0 10) Gen.alphaNum
   r1 <- evalIO $ apply initialEnv (initialEnv Map.! "trim") [SStr s]
   r2 <- evalIO $ apply initialEnv (initialEnv Map.! "trim") [r1]
   r1 === r2
@@ -500,30 +529,45 @@ prop_eval_trim_idempotent = property $ do
 prop_eval_replace_no_match :: Property
 prop_eval_replace_no_match = property $ do
   s <- forAll $ Gen.string (Range.linear 0 10) (Gen.element "abcde")
-  r <- evalIO $ apply initialEnv (initialEnv Map.! "replace")
-                  [SStr "XXXXX", SStr "YYY", SStr s]
+  r <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "replace")
+        [SStr "XXXXX", SStr "YYY", SStr s]
   r === SStr s
 
 prop_eval_startswith_self :: Property
 prop_eval_startswith_self = property $ do
-  pre  <- forAll $ Gen.string (Range.linear 0 5) Gen.alphaNum
+  pre <- forAll $ Gen.string (Range.linear 0 5) Gen.alphaNum
   rest <- forAll $ Gen.string (Range.linear 0 10) Gen.alphaNum
-  r    <- evalIO $ apply initialEnv (initialEnv Map.! "startswith")
-                     [SStr pre, SStr (pre ++ rest)]
+  r <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "startswith")
+        [SStr pre, SStr (pre ++ rest)]
   r === SBool True
 
 prop_eval_endswith_self :: Property
 prop_eval_endswith_self = property $ do
   suf <- forAll $ Gen.string (Range.linear 0 5) Gen.alphaNum
   pre <- forAll $ Gen.string (Range.linear 0 10) Gen.alphaNum
-  r   <- evalIO $ apply initialEnv (initialEnv Map.! "endswith")
-                    [SStr suf, SStr (pre ++ suf)]
+  r <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "endswith")
+        [SStr suf, SStr (pre ++ suf)]
   r === SBool True
 
 prop_eval_words_unwords_roundtrip :: Property
 prop_eval_words_unwords_roundtrip = property $ do
-  ws <- forAll $ Gen.list (Range.linear 1 5)
-                   (Gen.string (Range.linear 1 5) Gen.alpha)
+  ws <-
+    forAll $
+      Gen.list
+        (Range.linear 1 5)
+        (Gen.string (Range.linear 1 5) Gen.alpha)
   let sentence = unwords ws
   r <- evalIO $ apply initialEnv (initialEnv Map.! "words") [SStr sentence]
   r === SList (map SStr ws)
@@ -534,21 +578,32 @@ prop_eval_words_unwords_roundtrip = property $ do
 
 prop_eval_dict_set_get :: Property
 prop_eval_dict_set_get = property $ do
-  k  <- forAll genAlphaKey
-  v  <- forAll genFiniteDouble
-  d2 <- evalIO $ apply initialEnv (initialEnv Map.! "set")
-                   [SDict Map.empty, SStr k, SNum v]
+  k <- forAll genAlphaKey
+  v <- forAll genFiniteDouble
+  d2 <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "set")
+        [SDict Map.empty, SStr k, SNum v]
   -- Dict access via Sol's | syntax (EAccess)
-  r  <- evalIO $ evalExpr (Map.insert "d" d2 initialEnv)
-                   (EAccess (EVar "d") [KStr k])
+  r <-
+    evalIO $
+      evalExpr
+        (Map.insert "d" d2 initialEnv)
+        (EAccess (EVar "d") [KStr k])
   r === SNum v
 
 prop_eval_dict_has_after_set :: Property
 prop_eval_dict_has_after_set = property $ do
-  k  <- forAll genAlphaKey
-  d2 <- evalIO $ apply initialEnv (initialEnv Map.! "set")
-                   [SDict Map.empty, SStr k, SNum 1]
-  r  <- evalIO $ apply initialEnv (initialEnv Map.! "has") [d2, SStr k]
+  k <- forAll genAlphaKey
+  d2 <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "set")
+        [SDict Map.empty, SStr k, SNum 1]
+  r <- evalIO $ apply initialEnv (initialEnv Map.! "has") [d2, SStr k]
   r === SBool True
 
 prop_eval_dict_missing_key_is_null :: Property
@@ -557,14 +612,14 @@ prop_eval_dict_missing_key_is_null = property $ do
   -- SDict Map.empty has no keys — direct inspection
   case SDict Map.empty of
     SDict m -> assert (not (Map.member k m))
-    _       -> failure
+    _ -> failure
 
 prop_eval_dict_delete_removes :: Property
 prop_eval_dict_delete_removes = property $ do
-  k  <- forAll genAlphaKey
+  k <- forAll genAlphaKey
   let d = SDict (Map.fromList [(k, SNum 1)])
   d2 <- evalIO $ apply initialEnv (initialEnv Map.! "delete") [d, SStr k]
-  r  <- evalIO $ apply initialEnv (initialEnv Map.! "has") [d2, SStr k]
+  r <- evalIO $ apply initialEnv (initialEnv Map.! "has") [d2, SStr k]
   r === SBool False
 
 prop_eval_dict_merge_has_both_keys :: Property
@@ -572,8 +627,8 @@ prop_eval_dict_merge_has_both_keys = property $ do
   let d1 = SDict (Map.fromList [("a", SNum 1)])
       d2 = SDict (Map.fromList [("b", SNum 2)])
   merged <- evalIO $ apply initialEnv (initialEnv Map.! "merge") [d1, d2]
-  ra     <- evalIO $ apply initialEnv (initialEnv Map.! "has") [merged, SStr "a"]
-  rb     <- evalIO $ apply initialEnv (initialEnv Map.! "has") [merged, SStr "b"]
+  ra <- evalIO $ apply initialEnv (initialEnv Map.! "has") [merged, SStr "a"]
+  rb <- evalIO $ apply initialEnv (initialEnv Map.! "has") [merged, SStr "b"]
   ra === SBool True
   rb === SBool True
 
@@ -585,14 +640,14 @@ prop_eval_dict_merge_rhs_wins = property $ do
   -- inspect the merged SDict directly (rhs overrides lhs per bMerge)
   case merged of
     SDict m -> Map.lookup "k" m === Just (SNum 2)
-    _       -> failure
+    _ -> failure
 
 prop_eval_dict_keys_values :: Property
 prop_eval_dict_keys_values = property $ do
   k1 <- forAll genAlphaKey
   k2 <- forAll $ Gen.filter (/= k1) genAlphaKey
   let d = SDict (Map.fromList [(k1, SNum 1), (k2, SNum 2)])
-  ks <- evalIO $ apply initialEnv (initialEnv Map.! "keys")   [d]
+  ks <- evalIO $ apply initialEnv (initialEnv Map.! "keys") [d]
   vs <- evalIO $ apply initialEnv (initialEnv Map.! "values") [d]
   case (ks, vs) of
     (SList ksv, SList vsv) -> do
@@ -606,48 +661,52 @@ prop_eval_dict_keys_values = property $ do
 
 prop_eval_map_preserves_length :: Property
 prop_eval_map_preserves_length = property $ do
-  xs     <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
+  xs <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
   let list = SList (map SNum xs)
   addOne <- evalIO $ apply initialEnv (initialEnv Map.! "+") [SNum 1]
-  r      <- evalIO $ apply initialEnv (initialEnv Map.! "map") [addOne, list]
+  r <- evalIO $ apply initialEnv (initialEnv Map.! "map") [addOne, list]
   case r of
     SList ys -> length ys === length xs
-    _        -> failure
+    _ -> failure
 
 prop_eval_map_applies_fn :: Property
 prop_eval_map_applies_fn = property $ do
-  xs     <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
+  xs <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
   let list = SList (map SNum xs)
   addOne <- evalIO $ apply initialEnv (initialEnv Map.! "+") [SNum 1]
-  r      <- evalIO $ apply initialEnv (initialEnv Map.! "map") [addOne, list]
+  r <- evalIO $ apply initialEnv (initialEnv Map.! "map") [addOne, list]
   r === SList (map (SNum . (1 +)) xs)
 
 prop_eval_filter_is_subset :: Property
 prop_eval_filter_is_subset = property $ do
-  xs    <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
+  xs <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
   let list = SList (map SNum xs)
   -- (> 0) applied to x checks: x > 0
   gtZero <- evalIO $ apply initialEnv (initialEnv Map.! ">") [SNum 0]
-  r      <- evalIO $ apply initialEnv (initialEnv Map.! "filter") [gtZero, list]
+  r <- evalIO $ apply initialEnv (initialEnv Map.! "filter") [gtZero, list]
   case r of
     SList ys -> assert (length ys <= length xs)
-    _        -> failure
+    _ -> failure
 
 prop_eval_filter_correct :: Property
 prop_eval_filter_correct = property $ do
-  xs    <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
+  xs <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
   let list = SList (map SNum xs)
   gtZero <- evalIO $ apply initialEnv (initialEnv Map.! ">") [SNum 0]
-  r      <- evalIO $ apply initialEnv (initialEnv Map.! "filter") [gtZero, list]
+  r <- evalIO $ apply initialEnv (initialEnv Map.! "filter") [gtZero, list]
   r === SList (map SNum (filter (> 0) xs))
 
 prop_eval_fold_sum :: Property
 prop_eval_fold_sum = property $ do
-  x  <- forAll genFiniteDouble
+  x <- forAll genFiniteDouble
   xs <- forAll $ Gen.list (Range.linear 0 9) genFiniteDouble
   let list = SList (map SNum (x : xs))
-  r <- evalIO $ apply initialEnv (initialEnv Map.! "fold")
-                  [initialEnv Map.! "+", list]
+  r <-
+    evalIO $
+      apply
+        initialEnv
+        (initialEnv Map.! "fold")
+        [initialEnv Map.! "+", list]
   r === SNum (sum (x : xs))
 
 -- ===================================================================
@@ -660,7 +719,7 @@ prop_eval_partial_yields_partial = property $ do
   p <- evalIO $ apply initialEnv (initialEnv Map.! "+") [SNum a]
   case p of
     SPartial _ _ -> success
-    _            -> failure
+    _ -> failure
 
 prop_eval_partial_completes :: Property
 prop_eval_partial_completes = property $ do
@@ -689,7 +748,7 @@ prop_eval_estr = property $ do
 prop_eval_elist :: Property
 prop_eval_elist = property $ do
   ns <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
-  r  <- evalIO $ evalExpr initialEnv (EList (map ENum ns))
+  r <- evalIO $ evalExpr initialEnv (EList (map ENum ns))
   r === SList (map SNum ns)
 
 prop_eval_if_truthy_branch :: Property
@@ -845,7 +904,7 @@ prop_e2e_map_double :: Property
 prop_e2e_map_double = property $ do
   xs <- forAll $ Gen.list (Range.linear 1 5) (Gen.int (Range.linear 1 20))
   let elems = intercalate ", " (map show xs)
-      prog  = "double x = * x 2.\nresult = map double [" ++ elems ++ "]."
+      prog = "double x = * x 2.\nresult = map double [" ++ elems ++ "]."
   case parseProgram prog of
     Right stmts -> do
       env <- evalIO $ evalProg initialEnv stmts
@@ -858,7 +917,7 @@ prop_e2e_filter_evens = property $ do
   xs <- forAll $ Gen.list (Range.linear 1 8) (Gen.int (Range.linear 1 20))
   let evens = filter even xs
       elems = intercalate ", " (map show xs)
-      prog  = "even x = == (mod x 2) 0.\nresult = filter even [" ++ elems ++ "]."
+      prog = "even x = == (mod x 2) 0.\nresult = filter even [" ++ elems ++ "]."
   case parseProgram prog of
     Right stmts -> do
       env <- evalIO $ evalProg initialEnv stmts
