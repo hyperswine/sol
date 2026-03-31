@@ -8,7 +8,7 @@ module Lib
 import Control.Exception (SomeException, try)
 import Control.Monad.IO.Class (liftIO)
 import Data.List (isPrefixOf)
-import System.IO (hPutStrLn, stderr)
+import System.IO (hPutStrLn, hSetBuffering, BufferMode (..), stdout, stderr)
 
 import System.Console.Haskeline
   ( InputT, runInputT, defaultSettings, getInputLine
@@ -31,7 +31,8 @@ runFile path = readFile path >>= runCode
 
 -- | Run a Sol program given as a string
 runCode :: String -> IO ()
-runCode src =
+runCode src = do
+  hSetBuffering stdout LineBuffering
   case parseProgram src of
     Left  err    -> hPutStrLn stderr (show err)
     Right stmts  -> do

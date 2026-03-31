@@ -7,7 +7,7 @@ echo "Welcome to {name} v{version}!".
 
 # Pipeline Operator - basic usage
 numbers = [1, 2, 3, 4, 5].
-result = numbers |> map (* 2) |> filter (> 5) |> fold + 0.
+result = numbers |> map (* 2) |> filter (> 5) |> fold (+) 0.
 echo "Pipeline result: {result}".
 
 # Result Types with getenv
@@ -32,7 +32,7 @@ echo "Running as {user} in {current_dir}".
 data = [100, 200, 300, 400, 500].
 doubled = data |> map (* 2).
 large_nums = doubled |> filter (> 500).
-sum = large_nums |> fold + 0.
+sum = large_nums |> fold (+) 0.
 echo "Sum of large doubled numbers: {sum}".
 
 # Result error handling

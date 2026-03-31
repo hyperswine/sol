@@ -215,7 +215,7 @@ initialEnv =
       -- Higher-order functions
       builtin "map" 2 bMap,
       builtin "filter" 2 bFilter,
-      builtin "fold" 2 bFold,
+      builtin "fold" (-1) bFold,
       builtin "each" 2 bEach,
       -- List / string operations
       builtin "len" 1 (\_ [v] -> return (SNum (fromIntegral (lenOf v)))),
@@ -368,24 +368,36 @@ bExitCode _ _ = exitWith ExitSuccess >> return SNull
 
 bMap :: Env -> [SolVal] -> IO SolVal
 bMap env [f, SList xs] = SList <$> mapM (\x -> apply env f [x]) xs
-bMap _ [_, v] = solError ("map: expected a list, got " ++ typeName v)
+bMap env [f, SStr s]   = SList <$> mapM (\c -> apply env f [SStr [c]]) s
+bMap _ [_, v] = solError ("map: expected a list or string, got " ++ typeName v)
 bMap _ _ = solError "map: expected function and list"
 
 bFilter :: Env -> [SolVal] -> IO SolVal
 bFilter env [f, SList xs] = do
   results <- mapM (\x -> apply env f [x]) xs
   return (SList [x | (x, r) <- zip xs results, isTruthy r])
-bFilter _ [_, v] = solError ("filter: expected a list, got " ++ typeName v)
+bFilter env [f, SStr s] = do
+  results <- mapM (\c -> apply env f [SStr [c]]) s
+  return (SStr [c | (c, r) <- zip s results, isTruthy r])
+bFilter _ [_, v] = solError ("filter: expected a list or string, got " ++ typeName v)
 bFilter _ _ = solError "filter: expected function and list"
 
 bFold :: Env -> [SolVal] -> IO SolVal
+-- 2-arg form: fold fn list  (first element is initial accumulator)
 bFold env [f, SList (x : xs)] = foldM (\acc el -> apply env f [acc, el]) x xs
-bFold _ [_, SList []] = solError "fold: empty list"
-bFold _ [_, v] = solError ("fold: expected a list, got " ++ typeName v)
-bFold _ _ = solError "fold: expected function and list"
+bFold _   [_, SList []]       = solError "fold: empty list"
+bFold env [f, SStr (c : cs)]  = foldM (\acc ch -> apply env f [acc, SStr [ch]]) (SStr [c]) cs
+bFold _   [_, SStr ""]        = solError "fold: empty string"
+-- 3-arg form: fold fn init list  (explicit initial accumulator)
+bFold env [f, ini, SList xs]  = foldM (\acc el -> apply env f [acc, el]) ini xs
+bFold env [f, ini, SStr s]    = foldM (\acc c  -> apply env f [acc, SStr [c]]) ini s
+bFold _   [_, _, v]           = solError ("fold: third argument must be a list or string, got " ++ typeName v)
+bFold _   [_, v]              = solError ("fold: second argument must be a list or string, got " ++ typeName v)
+bFold _   _                   = solError "fold: usage: fold fn list  OR  fold fn init list"
 
 bEach :: Env -> [SolVal] -> IO SolVal
 bEach env [f, SList xs] = mapM_ (\x -> apply env f [x]) xs >> return SNull
+bEach env [f, SStr s]   = mapM_ (\c -> apply env f [SStr [c]]) s >> return SNull
 bEach _ _ = solError "each: expected function and list"
 
 -- List operations
