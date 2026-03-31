@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use <$>" #-}
 -- | Megaparsec parser for Sol.
 --
 -- Grammar in brief:
@@ -17,20 +19,17 @@
 --   - Strings: "..." = f-string, raw"..." = raw string
 --   - Access '|' is distinct from pipeline '|>' (checked with notFollowedBy)
 --   - Keywords: if | then | else | raw  (cannot be identifiers)
-module Sol.Parser
-  ( parseProgram
-  , SolParseError
-  ) where
+module Sol.Parser (parseProgram, SolParseError) where
 
 import Data.Functor (void)
 import Data.Void
+import Sol.Syntax
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
-import Sol.Syntax
-
 type Parser = Parsec Void String
+
 type SolParseError = ParseErrorBundle String Void
 
 -- ---------------------------------------------------------------------------
@@ -61,7 +60,7 @@ reserved = ["if", "then", "else", "raw"]
 -- | Parse a non-keyword identifier (letters, digits, _, ')
 pIdent :: Parser String
 pIdent = label "identifier" $ lexeme $ try $ do
-  c  <- letterChar
+  c <- letterChar
   cs <- many (alphaNumChar <|> char '_' <|> char '\'')
   let name = c : cs
   if name `elem` reserved
@@ -70,23 +69,29 @@ pIdent = label "identifier" $ lexeme $ try $ do
 
 -- | Parse an operator symbol (prefix-style in Sol: + a b)
 pOp :: Parser String
-pOp = label "operator" $ lexeme $ try $ choice
-  [ string "=="
-  , string "!="
-  , string "<="
-  , string ">="
-  , string "+"
-  , try (string "-" <* notFollowedBy digitChar)  -- distinguish from negative number
-  , string "*"
-  , string "/"
-  , string ">"
-  , string "<"
-  ]
+pOp =
+  label "operator" $
+    lexeme $
+      try $
+        choice
+          [ string "==",
+            string "!=",
+            string "<=",
+            string ">=",
+            string "+",
+            try (string "-" <* notFollowedBy digitChar), -- distinguish from negative number
+            string "*",
+            string "/",
+            string ">",
+            string "<"
+          ]
 
 -- | Consume a keyword as a whole word
 keyword :: String -> Parser ()
-keyword w = lexeme $ try $
-  string w *> notFollowedBy (alphaNumChar <|> char '_' <|> char '\'')
+keyword w =
+  lexeme $
+    try $
+      string w *> notFollowedBy (alphaNumChar <|> char '_' <|> char '\'')
 
 -- ---------------------------------------------------------------------------
 -- Literals
@@ -95,8 +100,8 @@ keyword w = lexeme $ try $
 -- | Number literal: optional leading '-' immediately before digits
 pNum :: Parser Expr
 pNum = label "number" $ lexeme $ try $ do
-  neg  <- optional (try (char '-' <* lookAhead digitChar))
-  ds   <- some digitChar
+  neg <- optional (try (char '-' <* lookAhead digitChar))
+  ds <- some digitChar
   frac <- optional (try (char '.' <* lookAhead digitChar) *> some digitChar)
   let s = maybe "" (const "-") neg ++ ds ++ maybe "" ("." ++) frac
   return (ENum (read s))
@@ -105,11 +110,13 @@ pNum = label "number" $ lexeme $ try $ do
 pStringLit :: Parser Expr
 pStringLit = pRaw <|> pFStr
   where
-    pRaw  = label "raw string" $ lexeme $ try $ do
+    pRaw = label "raw string" $ lexeme $ try $ do
       _ <- string "raw" <* notFollowedBy (alphaNumChar <|> char '_')
-      EStr  <$> (char '"' *> manyTill L.charLiteral (char '"'))
-    pFStr = label "string" $ lexeme $
-      EFStr <$> (char '"' *> manyTill L.charLiteral (char '"'))
+      EStr <$> (char '"' *> manyTill L.charLiteral (char '"'))
+    pFStr =
+      label "string" $
+        lexeme $
+          EFStr <$> (char '"' *> manyTill L.charLiteral (char '"'))
 
 -- | Quoted string content helper (without the EStr wrapper)
 quotedStr :: Parser String
@@ -120,12 +127,13 @@ quotedStr = char '"' *> manyTill L.charLiteral (char '"')
 -- ---------------------------------------------------------------------------
 
 pKey :: Parser Key
-pKey = choice
-  [ KVar <$> (char '(' *> pIdent <* char ')')         -- (varname)
-  , KStr <$> lexeme quotedStr                           -- "string"
-  , KNum . read <$> lexeme (some digitChar)             -- 123
-  , KStr <$> pIdent                                     -- bare identifier
-  ]
+pKey =
+  choice
+    [ KVar <$> (char '(' *> pIdent <* char ')'), -- (varname)
+      KStr <$> lexeme quotedStr, -- "string"
+      KNum . read <$> lexeme (some digitChar), -- 123
+      KStr <$> pIdent -- bare identifier
+    ]
 
 -- ---------------------------------------------------------------------------
 -- Composite expressions
@@ -133,13 +141,15 @@ pKey = choice
 
 -- | List literal
 pList :: Parser Expr
-pList = label "list" $
-  EList <$> (symbol "[" *> pExpr `sepBy` symbol "," <* symbol "]")
+pList =
+  label "list" $
+    EList <$> (symbol "[" *> pExpr `sepBy` symbol "," <* symbol "]")
 
 -- | Dict literal
 pDict :: Parser Expr
-pDict = label "dict" $
-  EDict <$> (symbol "{" *> pair `sepBy` symbol "," <* symbol "}")
+pDict =
+  label "dict" $
+    EDict <$> (symbol "{" *> pair `sepBy` symbol "," <* symbol "}")
   where
     pair = do
       k <- (EStr <$> lexeme quotedStr) <|> (EStr <$> pIdent)
@@ -153,15 +163,16 @@ pParens = symbol "(" *> pExpr <* symbol ")"
 
 -- | Atomic expression (cannot consume further arguments by itself)
 pAtom :: Parser Expr
-pAtom = choice
-  [ pParens
-  , pList
-  , pDict
-  , pStringLit
-  , pNum
-  , EVar <$> pOp     -- operators can appear as values (e.g. map (+ 1))
-  , EVar <$> pIdent
-  ]
+pAtom =
+  choice
+    [ pParens,
+      pList,
+      pDict,
+      pStringLit,
+      pNum,
+      EVar <$> pOp, -- operators can appear as values (e.g. map (+ 1))
+      EVar <$> pIdent
+    ]
 
 -- | Atom optionally extended by one or more '|key' accesses.
 --   The '|' must not be followed by '>' (that is pipeline).
@@ -212,21 +223,21 @@ pIfExpr = label "if expression" $ do
 -- | A greedy application: first atom is the function, rest are arguments
 pApp :: Parser Expr
 pApp = do
-  h  <- pAtomAcc
+  h <- pAtomAcc
   tl <- many pAtomAcc
   return $ toApp h tl
 
 -- | One pipeline stage: atom_acc+ (value is injected as first arg by eval)
 pPipeStage :: Parser [Expr]
 pPipeStage = do
-  h  <- pAtomAcc
+  h <- pAtomAcc
   tl <- many pAtomAcc
   return (h : tl)
 
 -- | Top-level expression: if | app, then optionally extended with '|>' stages
 pExpr :: Parser Expr
 pExpr = do
-  base   <- pIfExpr <|> pApp
+  base <- pIfExpr <|> pApp
   stages <- many (try (symbol "|>") *> pPipeStage)
   return $ case stages of
     [] -> base
@@ -245,10 +256,10 @@ pStmt = do
   return s
   where
     pAssign = do
-      name   <- pIdent
+      name <- pIdent
       params <- many pIdent
-      _      <- symbol "="
-      body   <- pExpr
+      _ <- symbol "="
+      body <- pExpr
       return (SAssign name params body)
 
 -- | Parse a complete Sol program
@@ -261,5 +272,5 @@ parseProgram = parse (scnl *> many pStmt <* eof) "<program>"
 
 -- | Collapse a head + tail list into an application node (or just the head)
 toApp :: Expr -> [Expr] -> Expr
-toApp h []  = h
-toApp h tl  = EApp h tl
+toApp h [] = h
+toApp h tl = EApp h tl
