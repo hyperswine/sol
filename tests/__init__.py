@@ -1,3 +1,0 @@
-"""
-Sol Language Test Suite
-"""
