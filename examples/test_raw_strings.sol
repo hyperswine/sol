@@ -22,3 +22,7 @@ echo another'var.
 arr' = [1, 2, 3].
 echo "Array with apostrophe in name:".
 echo arr'.
+
+if == res' 42 then echo "Yes" else if == res' 43 then echo "Yes'" else echo "NO".
+
+if == res' 42 then echo "hi" else "".
