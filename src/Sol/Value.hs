@@ -25,6 +25,9 @@ data SolVal
     SBuiltin String Int (Env -> [SolVal] -> IO SolVal)
   | -- | Partially applied function: base fn + accumulated args so far
     SPartial SolVal [SolVal]
+  | -- | Guarded definition: list of (params, optional guard, body) clauses.
+    --   Clauses are tried top-to-bottom; first whose guard is truthy wins.
+    SGuarded [([String], Maybe Expr, Expr)]
 
 emptyEnv :: Env
 emptyEnv = Map.empty
@@ -46,6 +49,7 @@ showVal (SDict m) = "{" ++ intercalate ", " (map pair (Map.toList m)) ++ "}"
 showVal (SFun ps _) = "<function(" ++ intercalate ", " ps ++ ")>"
 showVal (SBuiltin n _ _) = "<builtin:" ++ n ++ ">"
 showVal (SPartial f _) = "<partial " ++ showVal f ++ ">"
+showVal (SGuarded cs) = "<guarded(" ++ show (length cs) ++ " clauses)>"
 
 -- | Show with quotes for strings (used inside containers)
 showRepr :: SolVal -> String

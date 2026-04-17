@@ -1,10 +1,12 @@
 #!/usr/bin/env sol
-# Example demonstrating the new Sol features:
+# Example demonstrating Sol features:
 # 1. Result types with unwrap_or and unwrap_or_exit
 # 2. Pipeline operator |>
 # 3. F-strings with double quotes
+# 4. Guards replacing if/then/else
+# 5. Infix operators
 
-echo "=== Sol New Features Demo ===".
+echo "=== Sol Features Demo ===".
 
 # Example 1: Result Types
 echo "".
@@ -29,7 +31,6 @@ echo "--------------------".
 config_path = getenv "CONFIG_PATH" |> unwrap_or "/etc/config".
 echo "Config path: {config_path}".
 
-# Multiple stages
 registry = getenv "REGISTRY" |> unwrap_or "registry.io".
 echo "Registry: {registry}".
 
@@ -44,9 +45,25 @@ replicas = 3.
 
 echo "Deploying {service} to {env} with {replicas} replicas".
 
-# Example 4: Combined Usage
+# Example 4: Infix Operators and Guards
 echo "".
-echo "4. All Features Together".
+echo "4. Infix Operators and Guards".
+echo "-----------------------------".
+
+x = 42.
+category | x > 100 = "large".
+category | x > 10  = "medium".
+category            = "small".
+echo "x={x} is {category}".
+
+double n = n * 2.
+triple n = n * 3.
+echo "double 5 = {double 5}".
+echo "triple 5 = {triple 5}".
+
+# Example 5: Combined Usage
+echo "".
+echo "5. All Features Together".
 echo "------------------------".
 
 app = "myapp".
@@ -58,7 +75,6 @@ echo "Tag: {tag}".
 echo "Namespace: {namespace}".
 echo "Full image: {registry}/{app}:{tag}".
 
-# Conditional deployment based on Result
 docker_available = sh "docker --version".
 echo "Docker available: {succeeded docker_available}".
 

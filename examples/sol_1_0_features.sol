@@ -1,13 +1,16 @@
-# Sol 1.0 Feature Showcase: Demonstrates pipeline operator, f-string interpolation, and Result types
+# Sol Feature Showcase: pipeline operator, f-string interpolation, guards, infix operators
 
 # F-String Interpolation
 name = "Sol".
 version = "1.0".
 echo "Welcome to {name} v{version}!".
 
-# Pipeline Operator - basic usage
+# Pipeline Operator and named helpers
+double x = x * 2.
+gtFive x = x > 5.
+addUp a b = a + b.
 numbers = [1, 2, 3, 4, 5].
-result = numbers |> map (* 2) |> filter (> 5) |> fold (+) 0.
+result = numbers |> map double |> filter gtFive |> fold addUp 0.
 echo "Pipeline result: {result}".
 
 # Result Types with getenv
@@ -30,21 +33,26 @@ echo "Running as {user} in {current_dir}".
 
 # Data processing pipeline
 data = [100, 200, 300, 400, 500].
-doubled = data |> map (* 2).
-large_nums = doubled |> filter (> 500).
-sum = large_nums |> fold (+) 0.
-echo "Sum of large doubled numbers: {sum}".
+doubled = data |> map double.
+gtFiveHundred x = x > 500.
+large_nums = doubled |> filter gtFiveHundred.
+total = large_nums |> fold addUp 0.
+echo "Sum of large doubled numbers: {total}".
 
 # Result error handling
 missing_var = getenv "NONEXISTENT_VAR" |> unwrap_or "default_value".
 echo "Missing var value: {missing_var}".
 
-# F-string with nested data access
+# Dict access with new [] syntax
 user_info = {"name": "Alice", "age": 30}.
-echo "User {user_info|name} is {user_info|age} years old".
+echo "User {user_info["name"]} is {user_info["age"]} years old".
 
-# Pipeline with network operation (commented to avoid actual network call)
-# content = wget "https://api.github.com/users/octocat" |> unwrap_or "Failed to fetch".
-# echo content.
+# Guards replacing if/then/else
+score = 85.
+grade | score > 90 = "A".
+grade | score > 80 = "B".
+grade | score > 70 = "C".
+grade              = "D".
+echo "Score {score} gets grade: {grade}".
 
-echo "All Sol 1.0 features demonstrated!".
+echo "All Sol features demonstrated!".

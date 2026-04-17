@@ -153,19 +153,19 @@ prop_parse_dict = property $
 prop_parse_assign_var :: Property
 prop_parse_assign_var = property $
   case parseProgram "x = 42." of
-    Right [SAssign "x" [] (ENum 42)] -> success
+    Right [SAssign "x" [] Nothing (ENum 42)] -> success
     _ -> failure
 
 prop_parse_function_def :: Property
 prop_parse_function_def = property $
-  case parseProgram "double x = * x 2." of
-    Right [SAssign "double" ["x"] _] -> success
+  case parseProgram "double x = x * 2." of
+    Right [SAssign "double" ["x"] Nothing _] -> success
     _ -> failure
 
-prop_parse_if_expr :: Property
-prop_parse_if_expr = property $
-  case parseProgram "if true then 1 else 2." of
-    Right [SExpr (EIf _ _ _)] -> success
+prop_parse_guarded_value :: Property
+prop_parse_guarded_value = property $
+  case parseProgram "x | 1 = 42.\nx = 0." of
+    Right [SAssign "x" [] (Just _) _, SAssign "x" [] Nothing _] -> success
     _ -> failure
 
 prop_parse_pipeline :: Property
@@ -179,7 +179,7 @@ prop_parse_multiple_stmts = property $ do
   n <- forAll $ Gen.int (Range.linear 0 9)
   let prog = "x = " ++ show n ++ ".\ny = " ++ show n ++ "."
   case parseProgram prog of
-    Right [SAssign "x" [] _, SAssign "y" [] _] -> success
+    Right [SAssign "x" [] _ _, SAssign "y" [] _ _] -> success
     _ -> failure
 
 -- ===================================================================
@@ -681,9 +681,9 @@ prop_eval_filter_is_subset :: Property
 prop_eval_filter_is_subset = property $ do
   xs <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
   let list = SList (map SNum xs)
-  -- (> 0) applied to x checks: x > 0
-  gtZero <- evalIO $ apply initialEnv (initialEnv Map.! ">") [SNum 0]
-  r <- evalIO $ apply initialEnv (initialEnv Map.! "filter") [gtZero, list]
+  -- partial (< 0) applied to x gives: 0 < x, i.e. x > 0
+  ltZero <- evalIO $ apply initialEnv (initialEnv Map.! "<") [SNum 0]
+  r <- evalIO $ apply initialEnv (initialEnv Map.! "filter") [ltZero, list]
   case r of
     SList ys -> assert (length ys <= length xs)
     _ -> failure
@@ -692,8 +692,8 @@ prop_eval_filter_correct :: Property
 prop_eval_filter_correct = property $ do
   xs <- forAll $ Gen.list (Range.linear 0 10) genFiniteDouble
   let list = SList (map SNum xs)
-  gtZero <- evalIO $ apply initialEnv (initialEnv Map.! ">") [SNum 0]
-  r <- evalIO $ apply initialEnv (initialEnv Map.! "filter") [gtZero, list]
+  ltZero <- evalIO $ apply initialEnv (initialEnv Map.! "<") [SNum 0]
+  r <- evalIO $ apply initialEnv (initialEnv Map.! "filter") [ltZero, list]
   r === SList (map SNum (filter (> 0) xs))
 
 prop_eval_fold_sum :: Property
@@ -751,16 +751,22 @@ prop_eval_elist = property $ do
   r <- evalIO $ evalExpr initialEnv (EList (map ENum ns))
   r === SList (map SNum ns)
 
-prop_eval_if_truthy_branch :: Property
-prop_eval_if_truthy_branch = property $ do
+prop_eval_guard_truthy :: Property
+prop_eval_guard_truthy = property $ do
   n <- forAll genPosDouble
-  r <- evalIO $ evalExpr initialEnv (EIf (ENum n) (ENum 1) (ENum 2))
-  r === SNum 1
+  let stmts = [ SAssign "result" [] (Just (ENum n)) (ENum 1)
+              , SAssign "result" [] Nothing (ENum 2) ]
+  env <- evalIO $ evalProg initialEnv stmts
+  val <- evalIO $ evalExpr env (EVar "result")
+  val === SNum 1
 
-prop_eval_if_falsy_branch :: Property
-prop_eval_if_falsy_branch = property $ do
-  r <- evalIO $ evalExpr initialEnv (EIf (ENum 0) (ENum 1) (ENum 2))
-  r === SNum 2
+prop_eval_guard_falsy :: Property
+prop_eval_guard_falsy = property $ do
+  let stmts = [ SAssign "result" [] (Just (ENum 0)) (ENum 1)
+              , SAssign "result" [] Nothing (ENum 2) ]
+  env <- evalIO $ evalProg initialEnv stmts
+  val <- evalIO $ evalExpr env (EVar "result")
+  val === SNum 2
 
 prop_eval_evar_lookup :: Property
 prop_eval_evar_lookup = property $ do
@@ -875,7 +881,7 @@ prop_e2e_assign_number = property $ do
 prop_e2e_function_call :: Property
 prop_e2e_function_call = property $ do
   n <- forAll $ Gen.int (Range.linear 1 10)
-  let prog = "double x = * x 2.\nresult = double " ++ show n ++ "."
+  let prog = "double x = x * 2.\nresult = double " ++ show n ++ "."
   case parseProgram prog of
     Right stmts -> do
       env <- evalIO $ evalProg initialEnv stmts
@@ -893,7 +899,7 @@ prop_e2e_list_len_pipeline = property $
 prop_e2e_range_sum :: Property
 prop_e2e_range_sum = property $ do
   n <- forAll $ Gen.int (Range.linear 1 10)
-  let prog = "result = fold + (range 1 " ++ show (n + 1) ++ ")."
+  let prog = "add a b = a + b.\nresult = fold add (range 1 " ++ show (n + 1) ++ ")."
   case parseProgram prog of
     Right stmts -> do
       env <- evalIO $ evalProg initialEnv stmts
@@ -904,7 +910,7 @@ prop_e2e_map_double :: Property
 prop_e2e_map_double = property $ do
   xs <- forAll $ Gen.list (Range.linear 1 5) (Gen.int (Range.linear 1 20))
   let elems = intercalate ", " (map show xs)
-      prog = "double x = * x 2.\nresult = map double [" ++ elems ++ "]."
+      prog = "double x = x * 2.\nresult = map double [" ++ elems ++ "]."
   case parseProgram prog of
     Right stmts -> do
       env <- evalIO $ evalProg initialEnv stmts
@@ -917,7 +923,7 @@ prop_e2e_filter_evens = property $ do
   xs <- forAll $ Gen.list (Range.linear 1 8) (Gen.int (Range.linear 1 20))
   let evens = filter even xs
       elems = intercalate ", " (map show xs)
-      prog = "even x = == (mod x 2) 0.\nresult = filter even [" ++ elems ++ "]."
+      prog = "even x = x mod 2 == 0.\nresult = filter even [" ++ elems ++ "]."
   case parseProgram prog of
     Right stmts -> do
       env <- evalIO $ evalProg initialEnv stmts
@@ -925,14 +931,15 @@ prop_e2e_filter_evens = property $ do
         === Just (SList (map (SNum . fromIntegral) evens))
     Left _ -> failure
 
-prop_e2e_if_else :: Property
-prop_e2e_if_else = property $ do
+prop_e2e_guard_positive :: Property
+prop_e2e_guard_positive = property $ do
   n <- forAll $ Gen.int (Range.linear 1 100)
-  let prog = "result = if " ++ show n ++ " then 1 else 0."
+  let prog = "result | " ++ show n ++ " = 1.\nresult = 0."
   case parseProgram prog of
     Right stmts -> do
       env <- evalIO $ evalProg initialEnv stmts
-      Map.lookup "result" env === Just (SNum 1)
+      val <- evalIO $ evalExpr env (EVar "result")
+      val === SNum 1
     Left _ -> failure
 
 -- ===================================================================

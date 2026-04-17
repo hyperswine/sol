@@ -1,7 +1,7 @@
 echo "=== Comprehensive Sol Test ===".
 
-double x = * x 2.
-square x = * x x.
+double x = x * 2.
+square x = x * x.
 
 num1 = 5.
 doubled = double num1.
@@ -25,10 +25,5 @@ file = "example_dir/test.txt".
 file_content = progress (read file).
 echo "Content of file 'example_dir/test.txt':".
 echo file_content.
-
-# file = "../dist/sol".
-# file_content = progress (read file).
-# echo "Content of file '../dist/sol':".
-# echo file_content.
 
 echo "=== Test Complete ===".

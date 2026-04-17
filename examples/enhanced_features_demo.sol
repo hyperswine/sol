@@ -1,77 +1,65 @@
-# Sol 1.0 - Enhanced Features Demo
-# Demonstrates working pipes and if expressions
+# Sol — Enhanced Features Demo
+# Demonstrates pipelines, guards, and infix operators
 
 # === Basic Pipes ===
 echo "=== Basic Pipelines ===".
 
-# Simple value transformation
-x1 = 5 |> + 10.
-echo "5 |> + 10 = {x1}".
-
-# Array operations
+# Array operations with named helpers
+double x = x * 2.
 nums = [1, 2, 3, 4, 5].
-doubled = nums |> map (* 2).
+doubled = nums |> map double.
 echo "Doubled: {doubled}".
 
-# Chained operations
-filtered = doubled |> filter (> 5).
+# Filter with a named predicate
+gtFive x = x > 5.
+filtered = doubled |> filter gtFive.
 echo "Filtered (> 5): {filtered}".
 
 # Complete chain with fold
-sum = nums |> map (* 2) |> filter (> 5) |> fold + 0.
-echo "Sum of doubled filtered: {sum}".
+addUp a b = a + b.
+total = nums |> map double |> filter gtFive |> fold addUp 0.
+echo "Sum of doubled filtered: {total}".
 
-# === If Expressions ===
-echo "=== If Expressions ===".
+# === Guarded definitions ===
+echo "=== Guarded Definitions ===".
 
-# With literal condition
-result1 = if 1 then "truthy" else "falsy".
-echo "if 1: {result1}".
-
-result2 = if 0 then "truthy" else "falsy".
-echo "if 0: {result2}".
-
-# With variable condition
+# Value guard (0-param)
 flag = 1.
-status = if flag then "enabled" else "disabled".
+status | flag = "enabled".
+status        = "disabled".
 echo "Status: {status}".
 
-# With comparison
-age = 25.
-category = if (> age 18) then "adult" else "minor".
-echo "Age {age} is {category}".
+# Function guard
+classify x | x > 100 = "large".
+classify x | x > 0   = "positive".
+classify x            = "non-positive".
 
-# With string conditions
-name = "Alice".
-greeting = if name then "Hello {name}" else "Hello stranger".
-echo "{greeting}".
-
-# With empty string (falsy)
-empty = "".
-msg = if empty then "has content" else "empty".
-echo "Empty string test: {msg}".
+r150 = classify 150.
+r42  = classify 42.
+rn5  = classify -5.
+echo "classify 150: {r150}".
+echo "classify 42:  {r42}".
+echo "classify -5:  {rn5}".
 
 # === Complex Combinations ===
 echo "=== Complex Operations ===".
 
-# Variable in pipeline
 data = [10, 20, 30, 40].
-avg_doubled = data |> map (* 2) |> fold + 0.
-echo "Sum of doubled data: {avg_doubled}".
+sumDoubled = data |> map double |> fold addUp 0.
+echo "Sum of doubled data: {sumDoubled}".
 
-# If expression choosing between values (use literal to avoid parser issue)
-x = 100.
-choice = if (> x 50) then 100 else 0.
-echo "Choice based on x>50: {choice}".
-
-# Multiple conditions
+# Multiple conditions via guards
 score = 85.
-grade = if (> score 90) then "A" else if (> score 80) then "B" else "C".
+grade | score > 90 = "A".
+grade | score > 80 = "B".
+grade | score > 70 = "C".
+grade              = "D".
 echo "Score {score} gets grade: {grade}".
 
-# Nested if expressions
 temp = 75.
-weather = if (> temp 80) then "hot" else if (> temp 60) then "nice" else "cold".
+weather | temp > 80 = "hot".
+weather | temp > 60 = "nice".
+weather             = "cold".
 echo "Temperature {temp} feels: {weather}".
 
 echo "=== All tests complete! ===".

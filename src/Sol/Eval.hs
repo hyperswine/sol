@@ -37,7 +37,7 @@ import System.Process (readProcessWithExitCode, createProcess, proc, std_err, st
 evalExpr :: Env -> Expr -> IO SolVal
 evalExpr _ (ENum n) = return (SNum n)
 evalExpr _ (EStr s) = return (SStr s)
-evalExpr env (EFStr t) = return (SStr (interpolate env t))
+evalExpr env (EFStr t) = SStr <$> interpolate env t
 evalExpr env (EList es) = SList <$> mapM (evalExpr env) es
 evalExpr env (EDict pairs) = do
   kvs <- mapM evalPair pairs
@@ -48,9 +48,17 @@ evalExpr env (EDict pairs) = do
       ev <- evalExpr env v
       return (showVal ek, ev)
 
--- Variable lookup: 0-arity builtins are auto-called; unknown names → SStr
+-- Variable lookup:
+--   0-arity builtins are auto-called
+--   0-param SGuarded values are evaluated immediately
+--   unknown names fall back to SStr
 evalExpr env (EVar name) = case Map.lookup name env of
   Just (SBuiltin _ 0 impl) -> impl env []
+  Just (SGuarded clauses) | all (\(ps, _, _) -> null ps) clauses -> do
+    mval <- tryAllClauses env clauses []
+    case mval of
+      Just v  -> return v
+      Nothing -> solError ("no matching clause for '" ++ name ++ "'")
   Just v -> return v
   Nothing -> return (SStr name)
 evalExpr env (EAccess base keys) = do
@@ -62,21 +70,16 @@ evalExpr env (EApp func args) = do
   apply env fval avals
 
 -- Pipeline: val |> [f, extraArgs] |> ...
--- Each stage inserts the accumulated value as the FIRST argument to f.
+-- Each stage inserts the accumulated value as the LAST argument to f.
 evalExpr env (EPipe base stages) = do
   initVal <- evalExpr env base
   foldM applyStage initVal stages
   where
-    -- Pipeline stage: piped value is appended as the LAST argument.
-    -- So  `list |> map (+ 1)`  becomes  `map (+ 1) list`  (correct partial-app order).
     applyStage val (fExpr : argExprs) = do
       fval <- evalExpr env fExpr
       avals <- mapM (evalExpr env) argExprs
       apply env fval (avals ++ [val])
     applyStage val [] = return val
-evalExpr env (EIf cond t f) = do
-  cv <- evalExpr env cond
-  if isTruthy cv then evalExpr env t else evalExpr env f
 
 -- ============================================================
 -- Function application with partial application
@@ -96,6 +99,18 @@ apply env (SFun params body) args
   where
     have = length args
     need = length params
+
+-- Guarded function: try clauses top-to-bottom
+apply env (SGuarded clauses) args
+  | have < need && have > 0 = return (SPartial (SGuarded clauses) args)
+  | otherwise = do
+      mval <- tryAllClauses env clauses args
+      case mval of
+        Just v  -> return v
+        Nothing -> solError "no matching clause for guarded function"
+  where
+    have = length args
+    need = case clauses of ((ps, _, _) : _) -> length ps; [] -> 0
 
 -- Built-in function
 apply env (SBuiltin n arity impl) args
@@ -137,12 +152,27 @@ showKey (KVar v) = "(" ++ v ++ ")"
 -- ============================================================
 
 evalStmt :: Env -> Stmt -> IO Env
-evalStmt env (SAssign name [] body) = do
-  val <- evalExpr env body
-  return (Map.insert name val env)
-evalStmt env (SAssign name params body) = do
-  let fn = SFun params body
-  return (Map.insert name fn env)
+evalStmt env (SAssign name params (Just guard_) body) = do
+  -- Guarded clause: accumulate onto any existing SGuarded for this name
+  let newClause = (params, Just guard_, body)
+  let updated = case Map.lookup name env of
+        Just (SGuarded cs) -> SGuarded (cs ++ [newClause])
+        _                  -> SGuarded [newClause]
+  return (Map.insert name updated env)
+evalStmt env (SAssign name params Nothing body) = do
+  -- Unguarded clause
+  case Map.lookup name env of
+    Just (SGuarded existingClauses) -> do
+      -- Final fallthrough for an existing guarded definition
+      let newClause = (params, Nothing, body)
+      return (Map.insert name (SGuarded (existingClauses ++ [newClause])) env)
+    _ ->
+      -- Simple unguarded definition (same as before)
+      if null params
+        then do
+          val <- evalExpr env body
+          return (Map.insert name val env)
+        else return (Map.insert name (SFun params body) env)
 evalStmt env (SExpr expr) = do
   _ <- evalExpr env expr
   return env
@@ -151,22 +181,44 @@ evalStmt env (SExpr expr) = do
 evalProg :: Env -> [Stmt] -> IO Env
 evalProg = foldM evalStmt
 
+-- | Walk a clause list top-to-bottom, returning the body of the first match.
+tryAllClauses :: Env -> [([String], Maybe Expr, Expr)] -> [SolVal] -> IO (Maybe SolVal)
+tryAllClauses _ [] _ = return Nothing
+tryAllClauses env ((params, mguard, body) : rest) args = do
+  let callEnv = Map.fromList (zip params args) `Map.union` env
+  matches <- case mguard of
+    Nothing -> return True
+    Just g  -> isTruthy <$> evalExpr callEnv g
+  if matches
+    then Just <$> evalExpr callEnv body
+    else tryAllClauses env rest args
+
 -- ============================================================
 -- F-string interpolation
 -- ============================================================
 
-interpolate :: Env -> String -> String
+interpolate :: Env -> String -> IO String
 interpolate env tmpl = go tmpl
   where
-    go [] = []
+    go [] = return []
     go ('{' : rest) =
       let (name, after) = span (\c -> isAlphaNum c || c == '_') rest
        in case after of
-            ('}' : rest') ->
-              let val = fromMaybe (SStr ("{" ++ name ++ "}")) (Map.lookup name env)
-               in showVal val ++ go rest'
-            _ -> '{' : go rest -- malformed interpolation → keep as-is
-    go (c : rest) = c : go rest
+            ('}' : rest') -> do
+              val <- evalVar name
+              rest'' <- go rest'
+              return (showVal val ++ rest'')
+            _ -> ('{' :) <$> go rest -- malformed interpolation → keep as-is
+    go (c : rest) = (c :) <$> go rest
+    evalVar name = case Map.lookup name env of
+      Just (SBuiltin _ 0 impl) -> impl env []
+      Just (SGuarded clauses) | all (\(ps, _, _) -> null ps) clauses -> do
+        mval <- tryAllClauses env clauses []
+        case mval of
+          Just v  -> return v
+          Nothing -> return (SStr ("{" ++ name ++ "}"))
+      Just v  -> return v
+      Nothing -> return (SStr ("{" ++ name ++ "}"))
 
 -- ============================================================
 -- Error helper
@@ -313,12 +365,11 @@ numOp2 f (SNum a) (SNum b) = return (SNum (f a b))
 numOp2 f (SStr a) (SStr b) = return (SStr (show (f (read a) (read b))))
 numOp2 _ a b = solError ("arithmetic requires numbers, got " ++ typeName a ++ " and " ++ typeName b)
 
--- | Comparison: Args are (threshold, value). "> 3 5" = "is 5 > 3?" = True.
--- This allows curried predicates: (> 3) means "is value > 3?"
+-- | Comparison: standard infix order — a `op` b (left to right)
 cmpOp :: (Double -> Double -> Bool) -> SolVal -> SolVal -> IO SolVal
-cmpOp f (SNum a) (SNum b) = return (SBool (f b a)) -- NOTE: b > a, not a > b
-cmpOp f (SStr a) (SStr b) = return (SBool (f (fromIntegral (fromEnum (head b))) (fromIntegral (fromEnum (head a)))))
-cmpOp f a b = return (SBool (f (toDouble b) (toDouble a))) -- flipped
+cmpOp f (SNum a) (SNum b) = return (SBool (f a b))
+cmpOp f (SStr a) (SStr b) = return (SBool (f (fromIntegral (fromEnum (head a))) (fromIntegral (fromEnum (head b)))))
+cmpOp f a b = return (SBool (f (toDouble a) (toDouble b)))
   where
     toDouble (SNum n) = n
     toDouble _ = 0
@@ -925,6 +976,7 @@ typeName (SDict _) = "dict"
 typeName (SFun _ _) = "function"
 typeName (SBuiltin _ _ _) = "function"
 typeName (SPartial _ _) = "function"
+typeName (SGuarded _) = "function"
 
 -- Needed for bSort (Key ordering)
 sortKey :: SolVal -> Either Double String

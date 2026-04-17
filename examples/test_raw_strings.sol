@@ -23,6 +23,8 @@ arr' = [1, 2, 3].
 echo "Array with apostrophe in name:".
 echo arr'.
 
-if == res' 42 then echo "Yes" else if == res' 43 then echo "Yes'" else echo "NO".
-
-if == res' 42 then echo "hi" else "".
+# Guards replacing if/then/else
+answer | res' == 42 = "Yes".
+answer | res' == 43 = "Yes'".
+answer              = "NO".
+echo answer.
