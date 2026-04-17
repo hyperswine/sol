@@ -6,9 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to the
 [Haskell Package Versioning Policy](https://pvp.haskell.org/).
 
-## Unreleased
+## 2.0.0 - 2026-04-18
 
-Initial porting from python.
+### Changed (Breaking)
+
+- **Infix operators** — arithmetic and comparison operators are now infix: `a + b`, `x * y`, `a == b` instead of `+ a b`, `* x y`, `== a b`.
+- **Index access** — dictionary and list access now uses bracket syntax: `dict["key"]`, `list[0]`, `dict[var]` instead of `dict|key`, `list|1`, `dict|(varname)`.
+- **Guarded definitions** — replaced `if/then/else` expressions with Haskell-style guarded clauses:
+  ```
+  classify x | x > 0 = "positive".
+  classify x         = "non-positive".
+  ```
+  Works for both functions (with params) and plain values (0-param guards).
+- **Removed `if/then/else`** — the `if`, `then`, and `else` keywords no longer exist; all conditional logic uses guards.
+
+### Added
+
+- Operator precedence table (via `makeExprParser`): `[* / mod]` > `[+ -]` > `[>= <= > <]` > `[== !=]` > `[not]` > `[and]` > `[or]`.
+- `SGuarded` runtime value: multiple guarded clauses for the same name accumulate and are tried in order; first matching guard wins.
+- F-string `{var}` interpolation now properly evaluates guarded values.
 
 ## 1.0.0 - 2026-03-31
 
