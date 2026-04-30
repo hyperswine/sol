@@ -53,6 +53,8 @@ Use `raw"..."` to suppress interpolation:
 echo raw"No {interpolation} here".
 ```
 
+> **Note:** Only simple variable names work inside `{}`. For access chains like `user|name`, assign to a local variable first.
+
 ---
 
 ## Numbers
@@ -71,8 +73,8 @@ Arrays are **1-indexed**.
 
 ```sol
 nums = [1, 2, 3, 4, 5].
-echo nums|1.        # → 1
-echo nums|3.        # → 3
+echo nums|3.        # → 3 (pipe access)
+echo nums[3].       # → 3 (bracket access)
 ```
 
 ---
@@ -81,15 +83,40 @@ echo nums|3.        # → 3
 
 ```sol
 person = {"name": "Alice", "age": 30}.
-echo person|name.   # → Alice
-echo person|age.    # → 30
+echo person|name.        # → Alice  (pipe access)
+echo person["name"].     # → Alice  (bracket access)
+echo person|age.         # → 30
 ```
 
-Use a variable as a key with `(varname)`:
+Use a variable as a key:
 
 ```sol
 key = "name".
-echo person|(key).  # → Alice
+echo person|(key).   # → Alice  (dynamic pipe access)
+echo person[key].    # → Alice  (dynamic bracket access)
+```
+
+---
+
+## Data Access
+
+Sol has two syntaxes for accessing fields and indices — both are equivalent:
+
+| Style             | Example              | Notes                        |
+|-------------------|----------------------|------------------------------|
+| Pipe `\|`         | `obj\|key`           | No space before or after key |
+| Bracket `[]`      | `obj["key"]`         | No space before `[`          |
+| Numeric (pipe)    | `list\|1`            | 1-based                      |
+| Numeric (bracket) | `list[1]`            | 1-based                      |
+| Dynamic (pipe)    | `obj\|(varname)`     | Looks up variable as key     |
+| Dynamic (bracket) | `obj[varname]`       | Bare identifier = variable   |
+
+Chains work with both styles:
+
+```sol
+company = {name: "Acme", employees: [{name: "Alice"}, {name: "Bob"}]}.
+echo company|employees|1|name.              # → Alice
+echo company["employees"][1]["name"].       # → Alice
 ```
 
 ---
@@ -99,37 +126,93 @@ echo person|(key).  # → Alice
 Functions are defined with `name params = body`:
 
 ```sol
-double x = * x 2.
-add a b = + a b.
+double x = x * 2.
+add a b = a + b.
 
 echo (double 5).    # → 10
 echo (add 3 4).     # → 7
 ```
 
-**All arithmetic is prefix:** `+ a b`, `* a b`, `- a b`, `/ a b`.
-
 ---
 
 ## Operators
 
-| Operator | Meaning         | Example               |
-|----------|-----------------|-----------------------|
-| `+`      | add             | `+ 1 2` → `3`         |
-| `-`      | subtract        | `- 10 3` → `7`        |
-| `*`      | multiply        | `* 4 5` → `20`        |
-| `/`      | divide          | `/ 10 2` → `5.0`      |
-| `mod`    | modulo          | `mod 10 3` → `1`      |
-| `==`     | equals          | `== x 5` → `true`     |
-| `!=`     | not equals      | `!= x 5`              |
-| `>`      | greater than    | `> 3 5` → `true`      |
-| `<`      | less than       | `< 3 5` → `false`     |
-| `>=`     | ≥               | `>= 5 5` → `true`     |
-| `<=`     | ≤               | `<= 4 5` → `true`     |
-| `not`    | boolean not     | `not false` → `true`  |
-| `and`    | boolean and     | `and true false`      |
-| `or`     | boolean or      | `or false true`       |
+Sol supports both **infix** and **prefix** style for arithmetic and comparisons.
 
-> **Comparison convention:** `> threshold value` means "is value > threshold?", which lets comparisons work naturally as curried predicates (e.g. `filter (> 5)`).
+### Infix style (natural)
+
+```sol
+x = 10 + 5.         # → 15
+y = 10 * 3 - 2.     # → 28
+ok = x > 10.        # → true
+```
+
+### Prefix style (useful for partial application)
+
+```sol
+add5 = + 5.         # partial: add5 n = 5 + n
+double = * 2.       # partial: double n = 2 * n
+```
+
+### Operator table
+
+| Operator | Meaning         | Infix example   | Prefix example        |
+|----------|-----------------|-----------------|-----------------------|
+| `+`      | add             | `x + 1`         | `+ x 1`               |
+| `-`      | subtract        | `x - 1`         | `- x 1`               |
+| `*`      | multiply        | `x * 2`         | `* x 2`               |
+| `/`      | divide          | `x / 4`         | `/ x 4`               |
+| `mod`    | modulo          | `x mod 3`       | `mod x 3`             |
+| `==`     | equals          | `x == 5`        | `== x 5`              |
+| `!=`     | not equals      | `x != 5`        | `!= x 5`              |
+| `>`      | greater than    | `x > 3`         | `> 3 x` *(curried)*   |
+| `<`      | less than       | `x < 3`         | `< 3 x` *(curried)*   |
+| `>=`     | ≥               | `x >= 5`        | `>= 5 x`              |
+| `<=`     | ≤               | `x <= 5`        | `<= 5 x`              |
+| `not`    | boolean not     | —               | `not false`           |
+| `and`    | boolean and     | `a and b`       | `and a b`             |
+| `or`     | boolean or      | `a or b`        | `or a b`              |
+
+> **Curried prefix comparisons:** `> threshold value` asks "is `value > threshold`?". This lets comparisons work as predicates — e.g. `filter (> 5)` keeps elements greater than 5.
+
+---
+
+## Guards
+
+Guards are a concise alternative to chains of `if/else`. Clauses are tried top-to-bottom; the first whose condition is truthy wins.
+
+### Guarded variable
+
+```sol
+x = 42.
+category | x > 100 = "large".
+category | x > 10  = "medium".
+category            = "small".
+echo category.    # → medium
+```
+
+### Guarded function
+
+```sol
+classify n | n > 100 = "large".
+classify n | n > 0   = "positive".
+classify n            = "non-positive".
+
+echo (classify 150).    # → large
+echo (classify 42).     # → positive
+echo (classify -5).     # → non-positive
+```
+
+```sol
+score = 85.
+grade | score > 90 = "A".
+grade | score > 80 = "B".
+grade | score > 70 = "C".
+grade              = "D".
+echo grade.    # → B
+```
+
+> Guards replace most `if/then/else` chains. The final unguarded clause acts as the `else` branch.
 
 ---
 
@@ -141,7 +224,10 @@ Any function called with fewer arguments than it expects returns a partial:
 add5 = + 5.
 echo (add5 10).     # → 15
 
-is_big = > 100.
+double = * 2.
+echo (double 7).    # → 14
+
+is_big = > 100.     # prefix: > threshold value
 echo (is_big 200).  # → true
 ```
 
@@ -149,16 +235,16 @@ echo (is_big 200).  # → true
 
 ## If Expressions
 
-`if` is an expression — it can appear anywhere:
+`if` is an expression — it can appear anywhere. Guards are often cleaner for multiple branches.
 
 ```sol
 x = 7.
-label = if > x 10 then "big" else if > x 5 then "medium" else "small".
+label = if x > 10 then "big" else if x > 5 then "medium" else "small".
 echo label.   # → medium
 ```
 
 ```sol
-if == x 5 then echo "five" else echo "other".
+if x == 5 then echo "five" else echo "other".
 ```
 
 ---
@@ -193,10 +279,10 @@ each echo nums.                     # prints each element
 ## Recursion
 
 ```sol
-fib n = if == n 0 then 0 else if == n 1 then 1 else (+ (fib (- n 1)) (fib (- n 2))).
+fib n = if n == 0 then 0 else if n == 1 then 1 else (fib (n - 1)) + (fib (n - 2)).
 echo (fib 10).    # → 55
 
-fact n = if == n 0 then 1 else (* n (fact (- n 1))).
+fact n = if n == 0 then 1 else n * (fact (n - 1)).
 echo (fact 5).    # → 120
 ```
 
@@ -222,6 +308,13 @@ version = sh "git describe --tags" |> unwrap_or "unknown".
 sh "make build" |> unwrap_or_exit "Build failed!".
 ```
 
+Extract fields directly:
+
+```sol
+out = sh "date" |> stdout.
+err = sh "bad cmd" |> stderr_str.
+```
+
 ---
 
 ## Environment Variables
@@ -239,6 +332,7 @@ echo "Home: {home}".
 ```sol
 content = read "file.txt".
 write "output.txt" content.
+cp "src.txt" "dst.txt".      # copy a file
 
 files = ls ".".
 echo files.
@@ -248,6 +342,17 @@ rm "oldfile.txt".
 
 exists "file.txt".   # → true / false
 echo cwd.            # current working directory
+echo pwd.            # alias for cwd
+```
+
+Path helpers:
+
+```sol
+echo (name "/home/user/file.txt").    # → file.txt
+echo (ext "archive.tar.gz").          # → .gz
+echo (dir "/home/user/file.txt").     # → /home/user
+echo (path "/home/user" "docs").      # → /home/user/docs
+place "README.md" "dist".             # copy into dist/, returns dest path
 ```
 
 ---
@@ -287,7 +392,7 @@ csvwrite rows "output.csv".
 html = wget "https://example.com".
 echo html.
 
-content = get "https://api.example.com/data".
+content = get "https://api.example.com/data".  # alias for wget
 ```
 
 ---
@@ -300,6 +405,20 @@ echo hash.
 
 digest = md5 "hello".
 echo digest.
+```
+
+---
+
+## Progress
+
+`progress` wraps slow operations and shows a progress indicator where available:
+
+```sol
+# wget: shows curl's download progress bar
+content = progress (wget "https://example.com/large.tar.gz").
+
+# cp: uses pv if installed, otherwise shows a notice
+progress (cp "big.iso" "/backup/big.iso").
 ```
 
 ---
@@ -318,6 +437,10 @@ echo (startswith "he" "hello").           # true
 echo (endswith "lo" "hello").             # true
 echo (contains "ell" "hello").            # true
 echo (grep "error" "line1\nerror here").  # ["error here"]
+echo (lines "a\nb\nc").                   # ["a", "b", "c"]
+echo (unlines ["a", "b", "c"]).           # a\nb\nc
+echo (words "hello world").               # ["hello", "world"]
+echo (unwords ["hello", "world"]).        # hello world
 ```
 
 ---
@@ -341,6 +464,14 @@ echo (zip [1,2,3] [4,5,6]).  # [[1,4],[2,5],[3,6]]
 echo (flatten [[1,2],[3,4]]).# [1, 2, 3, 4]
 ```
 
+`fold` supports an optional explicit initial accumulator (3-arg form):
+
+```sol
+echo (fold + [1, 2, 3, 4]).        # 10  (first element is init)
+echo (fold + 0 [1, 2, 3, 4]).      # 10  (explicit init = 0)
+echo (fold + 100 [1, 2, 3]).       # 106 (explicit init = 100)
+```
+
 ---
 
 ## Dict Built-ins
@@ -357,6 +488,13 @@ d3 = delete d "b".       # {"a":1}
 echo (merge d {"c": 3}). # {"a":1,"b":2,"c":3}
 ```
 
+`set` also works on lists (1-based index):
+
+```sol
+xs = [10, 20, 30].
+xs2 = set xs 2 99.    # [10, 99, 30]
+```
+
 ---
 
 ## Type Conversion
@@ -368,4 +506,53 @@ echo (bool 0).       # false
 echo (bool "hi").    # true
 echo (type 42).      # number
 echo (type "hi").    # string
+echo (type []).      # list
+echo (type {}).      # dict
 ```
+
+**Truthiness rules:** `false`, `null`, `0`, `""`, `[]`, `{}` are falsy. Everything else is truthy.
+
+---
+
+## Utilities
+
+```sol
+exit.          # exit with code 0
+exit 1.        # exit with code 1
+```
+
+---
+
+## Quick Reference
+
+### All Built-in Functions
+
+**I/O:** `echo`, `print`
+
+**Arithmetic:** `+`, `-`, `*`, `/`, `mod`
+
+**Comparison:** `>`, `<`, `>=`, `<=`, `==`, `!=`, `not`, `and`, `or`
+
+**Higher-order:** `map`, `filter`, `fold`, `each`, `progress`
+
+**Lists:** `len`, `head`, `tail`, `append`, `prepend`, `concat`, `reverse`, `sort`, `range`, `zip`, `flatten`, `contains`
+
+**Strings:** `len`, `trim`, `split`, `join`, `replace`, `upper`, `lower`, `startswith`, `endswith`, `grep`, `lines`, `unlines`, `words`, `unwords`, `contains`
+
+**Dicts:** `keys`, `values`, `set`, `get`, `has`, `delete`, `merge`
+
+**Type:** `str`, `num`, `bool`, `type`
+
+**Filesystem:** `read`, `write`, `cp`, `ls`, `mkdir`, `rm`, `exists`, `name`, `ext`, `dir`, `path`, `place`, `cwd`, `pwd`
+
+**Shell:** `sh`, `getenv`, `setenv`
+
+**Results:** `failed`, `succeeded`, `unwrap_or`, `unwrap_or_exit`, `stdout`, `stderr_str`
+
+**Data:** `jsonread`, `jsonwrite`, `jsonparse`, `jsonstringify`, `csvread`, `csvwrite`
+
+**Network:** `wget`, `get`
+
+**Hashing:** `sha256`, `md5`
+
+**Process:** `exit`

@@ -3,681 +3,1037 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sol Programming Language Documentation</title>
+    <title>Sol Language Reference</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="layout">
-        <nav class="sidebar">
-            <h3>Sol Documentation</h3>
-            <ul>
-                <li><a href="#key-features">Features</a></li>
-                <li><a href="#quick-examples">Quick Start</a></li>
-                <li><a href="#language-syntax">Language Syntax</a></li>
-                <li><a href="#built-in-functions">Functions</a>
-                    <ul>
-                        <li><a href="#filesystem-operations">Filesystem</a></li>
-                        <li><a href="#arithmetic-operations">Arithmetic</a></li>
-                        <li><a href="#comparison-and-logic">Logic</a></li>
-                        <li><a href="#higher-order-functions">Higher-Order</a></li>
-                        <li><a href="#list-operations">Lists</a></li>
-                        <li><a href="#string-operations">Strings</a></li>
-                        <li><a href="#dict-operations">Dicts</a></li>
-                        <li><a href="#type-conversion">Types</a></li>
-                        <li><a href="#data-processing">Data</a></li>
-                        <li><a href="#web-and-network-operations">Network</a></li>
-                        <li><a href="#shell-operations">Shell</a></li>
-                        <li><a href="#result-type-operations">Results</a></li>
-                        <li><a href="#utilities">Utilities</a></li>
-                    </ul>
-                </li>
-                <li><a href="#usage">Usage</a></li>
-                <li><a href="#examples">Examples</a></li>
-                <li><a href="#implementation">Implementation</a></li>
-                <li><a href="#language-philosophy">Philosophy</a></li>
-            </ul>
-        </nav>
-        <main class="content">
-            <p>Sol is a minimal, batteries-included scripting language designed for readability and powerful standard tooling. Implemented in Haskell, Sol provides a highly expressive scripting experience with clean, functional syntax.</p>
+<div class="layout">
 
-<h2 id="key-features">Key Features</h2>
+<!-- =============================================================== SIDEBAR -->
+<nav class="sidebar">
+    <div class="sidebar-logo">
+        <h2>Sol</h2>
+        <span class="version-badge">1.0</span>
+    </div>
+
+    <div class="sidebar-section">
+        <div class="sidebar-section-label">Language</div>
+        <ul>
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#syntax">Syntax</a></li>
+            <li><a href="#operators">Operators</a></li>
+            <li><a href="#guards">Guards</a></li>
+            <li><a href="#data-access">Data Access</a></li>
+            <li><a href="#pipelines">Pipelines</a></li>
+            <li><a href="#partial-application">Partial Application</a></li>
+            <li><a href="#if-expressions">If Expressions</a></li>
+        </ul>
+    </div>
+
+    <div class="sidebar-section">
+        <div class="sidebar-section-label">Built-ins</div>
+        <ul>
+            <li><a href="#io">I/O</a></li>
+            <li><a href="#arithmetic">Arithmetic</a></li>
+            <li><a href="#comparison">Comparison &amp; Logic</a></li>
+            <li><a href="#higher-order">Higher-Order</a></li>
+            <li><a href="#lists">List Operations</a></li>
+            <li><a href="#strings">String Operations</a></li>
+            <li><a href="#dicts">Dict Operations</a></li>
+            <li><a href="#type-conversion">Type Conversion</a></li>
+            <li><a href="#filesystem">Filesystem</a></li>
+            <li><a href="#shell">Shell &amp; Env</a></li>
+            <li><a href="#results">Result Helpers</a></li>
+            <li><a href="#data">Data (JSON / CSV)</a></li>
+            <li><a href="#network">Network</a></li>
+            <li><a href="#hashing">Hashing</a></li>
+            <li><a href="#process">Process</a></li>
+        </ul>
+    </div>
+
+    <div class="sidebar-section">
+        <div class="sidebar-section-label">Reference</div>
+        <ul>
+            <li><a href="#examples">Examples</a></li>
+            <li><a href="#usage">CLI Usage</a></li>
+            <li><a href="#implementation">Implementation</a></li>
+        </ul>
+    </div>
+</nav>
+
+<!-- ============================================================== CONTENT -->
+<main class="content">
+
+<h1>Sol Language Reference</h1>
+<p class="subtitle">A minimal, batteries-included scripting language with functional syntax.</p>
+
+<!-- ─── OVERVIEW ──────────────────────────────────────────────────────────── -->
+<h2 id="overview">Overview</h2>
+
+<p>Sol is a scripting language with a clean, readable syntax. Every statement ends with a <code>.</code>. It is implemented in Haskell using Megaparsec and supports functional patterns like partial application, pipelines, and higher-order functions.</p>
 
 <ul>
-<li><strong>Functional Syntax</strong>: Statements end with periods (<code>.</code>), prefix function calls like <code>func arg1 arg2</code></li>
-<li><strong>Pipeline Operator</strong>: Chain operations with <code>|&gt;</code> for readable data transformations</li>
-<li><strong>String Interpolation</strong>: Variable interpolation in double-quoted strings via <code>{varname}</code></li>
-<li><strong>Raw Strings</strong>: No-interpolation strings with <code>raw"..."</code> syntax</li>
-<li><strong>Partial Application</strong>: Any fixed-arity function can be partially applied</li>
-<li><strong>Shell Integration</strong>: Execute commands with <code>sh</code> and handle results safely</li>
-<li><strong>Built-in Tools</strong>: File operations, networking, data processing, and more</li>
-<li><strong>Interactive REPL</strong>: History and multiline editing via Haskeline</li>
-<li><strong>Dynamic Scope</strong>: Simple environment model — no closures needed</li>
+    <li><strong>Statements</strong> end with a period <code>.</code></li>
+    <li><strong>Comments</strong> start with <code>#</code></li>
+    <li><strong>Strings</strong> use <code>"double quotes"</code> with <code>{var}</code> interpolation, or <code>raw"..."</code> to suppress it</li>
+    <li><strong>Lists</strong> are 1-based: <code>[1, 2, 3]</code></li>
+    <li><strong>Functions</strong> are applied prefix: <code>fn arg1 arg2</code></li>
+    <li><strong>Pipelines</strong>: <code>val |&gt; fn arg</code> passes <code>val</code> as the last argument</li>
 </ul>
 
-<p>The implementation is purely functional and expression-based, written in Haskell using Megaparsec for parsing.</p>
+<!-- ─── SYNTAX ─────────────────────────────────────────────────────────────── -->
+<h2 id="syntax">Syntax</h2>
 
-<h2 id="quick-examples">Quick Examples</h2>
+<h3>Literals</h3>
+<pre><code>42          # number
+3.14        # float
+-5          # negative number
+"hello"     # f-string (supports {var} interpolation)
+raw"hello"  # raw string (no interpolation)
+true false  # booleans
+null        # null value
+[1, 2, 3]   # list (1-based)
+{k: v}      # dict</code></pre>
 
-<h3 id="basic-usage">Basic Usage</h3>
-<pre><code class="sol">echo "Hello World".</code></pre>
-
-<h3 id="string-interpolation">String Interpolation</h3>
-<pre><code class="sol">name = "Sol".
-version = "1.0".
-echo "Welcome to {name} v{version}!".</code></pre>
-
-<h3 id="raw-strings">Raw Strings</h3>
-<pre><code class="sol"># raw"..." disables {var} interpolation
-path = raw"C:\Users\{username}".
-echo path.</code></pre>
-
-<h3 id="pipeline-operator">Pipeline Operator</h3>
-<pre><code class="sol"># Chain operations left-to-right; piped value is last argument
-getenv "HOME" |> unwrap_or "/tmp" |> echo.
-
-# Data processing pipelines
-[1, 2, 3, 4, 5] |> map (* 2) |> filter (> 5) |> echo.</code></pre>
-
-<h3 id="partial-application">Partial Application</h3>
-<pre><code class="sol"># Supplying fewer args than arity returns a partial function
-add10 = + 10.
-double = * 2.
-[1, 2, 3] |> map double |> echo.    # [2, 4, 6]
-[1, 2, 3] |> map add10 |> echo.     # [11, 12, 13]</code></pre>
-
-<h3 id="result-types-for-error-handling">Shell and Result Handling</h3>
-<pre><code class="sol"># sh returns a dict with exitcode, stdout, stderr fields
-result = sh "ls -la".
-succeeded result |> echo.
-
-# Safe environment variable access (getenv returns null when unset)
-home = getenv "HOME" |> unwrap_or "/default/path".
-
-# Exit on error
-getenv "REQUIRED_VAR" |> unwrap_or_exit "Missing REQUIRED_VAR".</code></pre>
-
-<h3 id="file-operations">File Operations</h3>
-<pre><code class="sol">mkdir "my_directory".
-write "test.txt" "Hello Sol!".
-content = read "test.txt".
-echo content.</code></pre>
-
-<h2 id="language-syntax">Language Syntax</h2>
-
-<h3>Statements</h3>
-<p>Every statement ends with a period <code>.</code>. Comments begin with <code>#</code>.</p>
-<pre><code class="sol">x = 42.              # variable assignment
-echo x.              # expression statement
-f x = * x 2.        # function definition (f takes param x)</code></pre>
-
-<h3>Expressions</h3>
-<ul>
-<li><strong>Numbers</strong>: <code>42</code>, <code>-3</code>, <code>1.5</code></li>
-<li><strong>Strings</strong>: <code>"hello {name}"</code> (interpolated) or <code>raw"literal"</code> (no interpolation)</li>
-<li><strong>Lists</strong>: <code>[1, 2, 3]</code> — 1-based indexing</li>
-<li><strong>Dicts</strong>: <code>{key: value, other: 2}</code> — string keys</li>
-<li><strong>Application</strong>: <code>func arg1 arg2</code> — prefix style</li>
-<li><strong>Pipeline</strong>: <code>val |&gt; func arg</code> — value inserted as last argument</li>
-<li><strong>If</strong>: <code>if cond then expr else expr</code></li>
-<li><strong>Access</strong>: <code>obj|key</code> or <code>obj|1</code> or <code>obj|(varname)</code></li>
-</ul>
+<h3>Assignments &amp; Functions</h3>
+<pre><code>x = 42.                      # variable
+name = "Alice".              # string variable
+double x = x * 2.           # function definition
+add a b = a + b.             # multi-param function
+greet name = "Hi, {name}!". # function with interpolation</code></pre>
 
 <h3>String Interpolation</h3>
-<p>Double-quoted strings support <code>{varname}</code> interpolation where <code>varname</code> is a simple identifier looked up in the current environment.</p>
-<pre><code class="sol">x = 42.
-echo "x is {x}".        # prints: x is 42</code></pre>
-<p><strong>Note</strong>: Only simple variable names are supported inside <code>{}</code>. Access chains like <code>{user|name}</code> are not interpolated — assign to a variable first.</p>
+<p>Double-quoted strings support <code>{varname}</code> interpolation. Only simple identifiers are supported inside <code>{}</code> — for access chains, assign to a local variable first.</p>
+<pre><code>name = "Sol".
+echo "Hello, {name}!".    # prints: Hello, Sol!
 
-<h3>Data Access</h3>
-<pre><code class="sol">d = {name: "Alice", scores: [10, 20, 30]}.
-echo d|name.             # Alice
-echo d|scores|2.         # 20  (1-based)
+# Workaround for access chains:
+fname = user|name.
+echo "Name: {fname}".</code></pre>
 
-# Variable key lookup
+<!-- ─── OPERATORS ──────────────────────────────────────────────────────────── -->
+<h2 id="operators">Operators</h2>
+
+<p>Sol supports both <strong>infix</strong> (natural) and <strong>prefix</strong> (curried) operator forms.</p>
+
+<table>
+    <thead><tr><th>Operator</th><th>Meaning</th><th>Infix</th><th>Prefix (curried)</th></tr></thead>
+    <tbody>
+        <tr><td><code>+</code></td><td>Addition</td><td><code>x + 1</code></td><td><code>+ x 1</code></td></tr>
+        <tr><td><code>-</code></td><td>Subtraction</td><td><code>x - 1</code></td><td><code>- x 1</code></td></tr>
+        <tr><td><code>*</code></td><td>Multiplication</td><td><code>x * 2</code></td><td><code>* x 2</code></td></tr>
+        <tr><td><code>/</code></td><td>Division</td><td><code>x / 4</code></td><td><code>/ x 4</code></td></tr>
+        <tr><td><code>mod</code></td><td>Modulo</td><td><code>x mod 3</code></td><td><code>mod x 3</code></td></tr>
+        <tr><td><code>==</code></td><td>Equals</td><td><code>x == 5</code></td><td><code>== x 5</code></td></tr>
+        <tr><td><code>!=</code></td><td>Not equals</td><td><code>x != 5</code></td><td><code>!= x 5</code></td></tr>
+        <tr><td><code>&gt;</code></td><td>Greater than</td><td><code>x &gt; 3</code></td><td><code>&gt; 3 x</code> <em>(curried)</em></td></tr>
+        <tr><td><code>&lt;</code></td><td>Less than</td><td><code>x &lt; 3</code></td><td><code>&lt; 3 x</code></td></tr>
+        <tr><td><code>&gt;=</code></td><td>&ge;</td><td><code>x &gt;= 5</code></td><td><code>&gt;= 5 x</code></td></tr>
+        <tr><td><code>&lt;=</code></td><td>&le;</td><td><code>x &lt;= 5</code></td><td><code>&lt;= 5 x</code></td></tr>
+        <tr><td><code>not</code></td><td>Boolean not</td><td>&#8212;</td><td><code>not false</code></td></tr>
+        <tr><td><code>and</code></td><td>Boolean and</td><td><code>a and b</code></td><td><code>and a b</code></td></tr>
+        <tr><td><code>or</code></td><td>Boolean or</td><td><code>a or b</code></td><td><code>or a b</code></td></tr>
+    </tbody>
+</table>
+
+<div class="note"><strong>Curried prefix comparisons:</strong> <code>&gt; threshold value</code> asks &ldquo;is value &gt; threshold?&rdquo;. So <code>filter (&gt; 5)</code> keeps elements greater than 5.</div>
+
+<!-- ─── GUARDS ─────────────────────────────────────────────────────────────── -->
+<h2 id="guards">Guards</h2>
+
+<p>Guards are pattern-matched conditional definitions, tried top-to-bottom. The final unguarded clause acts as the <code>else</code> fallthrough.</p>
+
+<h3>Guarded variable</h3>
+<pre><code>x = 42.
+category | x &gt; 100 = "large".
+category | x &gt; 10  = "medium".
+category            = "small".
+echo category.    # medium</code></pre>
+
+<h3>Guarded function</h3>
+<pre><code>classify n | n &gt; 100 = "large".
+classify n | n &gt; 0   = "positive".
+classify n            = "non-positive".
+
+echo (classify 150).    # large
+echo (classify 42).     # positive
+echo (classify -5).     # non-positive</code></pre>
+
+<h3>Grade example</h3>
+<pre><code>score = 85.
+grade | score &gt; 90 = "A".
+grade | score &gt; 80 = "B".
+grade | score &gt; 70 = "C".
+grade              = "D".
+echo grade.    # B</code></pre>
+
+<div class="tip"><strong>Tip:</strong> Guards replace most <code>if/then/else</code> chains. Use them whenever you have more than two branches.</div>
+
+<!-- ─── DATA ACCESS ───────────────────────────────────────────────────────── -->
+<h2 id="data-access">Data Access</h2>
+
+<p>Two equivalent syntaxes for accessing dict keys and list indices:</p>
+
+<table>
+    <thead><tr><th>Style</th><th>Example</th><th>Notes</th></tr></thead>
+    <tbody>
+        <tr><td>Pipe <code>|</code></td><td><code>obj|key</code></td><td>No space around key</td></tr>
+        <tr><td>Bracket <code>[]</code></td><td><code>obj["key"]</code></td><td>No space before <code>[</code></td></tr>
+        <tr><td>Numeric pipe</td><td><code>list|1</code></td><td>1-based index</td></tr>
+        <tr><td>Numeric bracket</td><td><code>list[1]</code></td><td>1-based index</td></tr>
+        <tr><td>Dynamic pipe</td><td><code>obj|(varname)</code></td><td>Looks up variable as key</td></tr>
+        <tr><td>Dynamic bracket</td><td><code>obj[varname]</code></td><td>Bare identifier = variable</td></tr>
+    </tbody>
+</table>
+
+<pre><code>person = {name: "Alice", scores: [10, 20, 30]}.
+echo person|name.              # Alice
+echo person["name"].           # Alice
+echo person|scores|2.          # 20
+echo person["scores"][2].      # 20
+
 k = "name".
-echo d|(k).              # Alice</code></pre>
+echo person|(k).               # Alice
+echo person[k].                # Alice</code></pre>
 
-<h2 id="built-in-functions">BUILT-IN FUNCTIONS</h2>
+<!-- ─── PIPELINES ──────────────────────────────────────────────────────────── -->
+<h2 id="pipelines">Pipelines</h2>
 
-<p>Sol's standard library is implemented in Haskell. All functions listed below are available in every script and in the REPL.</p>
+<p>The <code>|&gt;</code> operator passes the accumulated value as the <strong>last</strong> argument to the next function.</p>
 
-<h3 id="filesystem-operations"><strong>Filesystem Operations</strong></h3>
+<pre><code>[1, 2, 3, 4, 5] |&gt; filter (&gt; 2) |&gt; map (* 3) |&gt; fold + |&gt; echo.
 
-<ul>
-<li><strong><code>ls path</code></strong> — List directory contents as a list of filenames.
-<br>Example: <code>files = ls "src".</code></li>
-</ul>
+getenv "HOME" |&gt; unwrap_or "/tmp" |&gt; echo.
 
-<ul>
-<li><strong><code>pwd</code></strong> / <strong><code>cwd</code></strong> — Return the current working directory as a string.
-<br>Example: <code>current = pwd.</code></li>
-</ul>
+sh "git log --oneline -5" |&gt; stdout |&gt; echo.</code></pre>
 
-<ul>
-<li><strong><code>mkdir path</code></strong> — Create a directory (including any missing parents).
-<br>Example: <code>mkdir "project/src".</code></li>
-</ul>
+<!-- ─── PARTIAL APPLICATION ──────────────────────────────────────────────── -->
+<h2 id="partial-application">Partial Application</h2>
 
-<ul>
-<li><strong><code>rm path</code></strong> — Remove a file or recursively remove a directory.
-<br>Example: <code>rm "temp_file.txt".</code></li>
-</ul>
+<p>Calling any function with fewer arguments than its arity returns a partial.</p>
 
-<ul>
-<li><strong><code>read path</code></strong> — Read file contents as a string. Errors if the file does not exist.
-<br>Example: <code>content = read "config.txt".</code></li>
-</ul>
+<pre><code>add5   = + 5.          # add5 n = n + 5
+double = * 2.          # double n = n * 2
+is_big = &gt; 100.        # is_big n = n &gt; 100
 
-<ul>
-<li><strong><code>write path content</code></strong> — Write a string to a file, creating it if needed.
-<br>Example: <code>write "output.txt" "Hello World".</code></li>
-</ul>
+echo (add5 10).        # 15
+echo (double 7).       # 14
+echo (is_big 200).     # true
 
-<ul>
-<li><strong><code>exists path</code></strong> — Return <code>true</code> if a file or directory exists at the given path.
-<br>Example: <code>ok = exists "myfile.txt".</code></li>
-</ul>
+[1,2,3] |&gt; map double |&gt; echo.   # [2, 4, 6]</code></pre>
 
-<ul>
-<li><strong><code>name path</code></strong> — Return the filename component of a path.
-<br>Example: <code>name "/home/user/file.txt".</code> → <code>"file.txt"</code></li>
-</ul>
+<!-- ─── IF EXPRESSIONS ─────────────────────────────────────────────────────── -->
+<h2 id="if-expressions">If Expressions</h2>
 
-<ul>
-<li><strong><code>ext path</code></strong> — Return the file extension (including the dot).
-<br>Example: <code>ext "archive.tar.gz".</code> → <code>".gz"</code></li>
-</ul>
+<p><code>if</code> is an expression &mdash; it can appear anywhere a value is expected.</p>
 
-<ul>
-<li><strong><code>dir path</code></strong> — Return the directory component of a path.
-<br>Example: <code>dir "/home/user/file.txt".</code> → <code>"/home/user"</code></li>
-</ul>
+<pre><code>label = if x &gt; 10 then "big" else if x &gt; 5 then "medium" else "small".
+echo label.
 
-<ul>
-<li><strong><code>path base child</code></strong> — Join two path segments.
-<br>Example: <code>path "/home/user" "docs".</code> → <code>"/home/user/docs"</code></li>
-</ul>
+if x == 0 then echo "zero" else echo "nonzero".</code></pre>
 
-<ul>
-<li><strong><code>place src destdir</code></strong> — Copy a file into a destination directory.  Returns the destination path.
-<br>Example: <code>place "README.md" "dist".</code></li>
-</ul>
+<div class="note"><strong>Note:</strong> For more than two branches, <a href="#guards">Guards</a> are usually cleaner than nested <code>if/else</code>.</div>
 
-<h3 id="arithmetic-operations"><strong>Arithmetic Operations</strong></h3>
+<!-- ================================================================ BUILT-INS -->
 
-<p>All arithmetic operators are binary (arity 2) and fully support partial application.</p>
+<!-- ─── I/O ──────────────────────────────────────────────────────────────── -->
+<h2 id="io">I/O</h2>
 
-<ul>
-<li><strong><code>+ a b</code></strong> — Addition.
-<br>Example: <code>+ 10 20.</code> → <code>30</code>
-<br>Partial: <code>add5 = + 5.</code> then <code>add5 3.</code> → <code>8</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/echo" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">echo</span> <span class="fn-params">value</span></div>
+    <div class="fn-desc">Print a value to stdout followed by a newline. <code>print</code> is an alias.</div>
+    <div class="fn-example"><pre><code>echo "Hello, World!".
+echo 42.
+echo [1, 2, 3].</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>- a b</code></strong> — Subtraction.
-<br>Example: <code>- 100 25.</code> → <code>75</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/print" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">print</span> <span class="fn-params">value</span></div>
+    <div class="fn-desc">Alias for <code>echo</code>.</div>
+</div>
 
-<ul>
-<li><strong><code>* a b</code></strong> — Multiplication.
-<br>Example: <code>* 6 7.</code> → <code>42</code>
-<br>Partial: <code>double = * 2.</code></li>
-</ul>
+<!-- ─── ARITHMETIC ───────────────────────────────────────────────────────── -->
+<h2 id="arithmetic">Arithmetic</h2>
 
-<ul>
-<li><strong><code>/ a b</code></strong> — Division.
-<br>Example: <code>/ 100 4.</code> → <code>25</code></li>
-</ul>
+<p>All arithmetic operators are arity-2 and support partial application.</p>
 
-<ul>
-<li><strong><code>mod a b</code></strong> — Integer modulo.
-<br>Example: <code>mod 10 3.</code> → <code>1</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/+" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">+</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Addition. Infix: <code>a + b</code>. Partial: <code>add5 = + 5.</code></div>
+    <div class="fn-example"><pre><code>echo (3 + 4).     # 7
+add10 = + 10.
+echo (add10 5).   # 15</code></pre></div>
+</div>
 
-<h3 id="comparison-and-logic"><strong>Comparison and Logic</strong></h3>
+<a name="//apple_ref/cpp/Function/-" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">-</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Subtraction. Infix: <code>a - b</code>.</div>
+    <div class="fn-example"><pre><code>echo (100 - 25).   # 75</code></pre></div>
+</div>
 
-<p>Comparison operators are <strong>curried with a flipped argument order</strong>: <code>&gt; threshold value</code> asks <em>"is value &gt; threshold?"</em>. This means the partial form <code>(> 5)</code> is a predicate that returns true for values greater than 5 — ideal for use with <code>filter</code>.</p>
+<a name="//apple_ref/cpp/Function/*" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">*</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Multiplication. Infix: <code>a * b</code>. Partial: <code>double = * 2.</code></div>
+    <div class="fn-example"><pre><code>echo (6 * 7).     # 42
+double = * 2.
+echo (double 8).  # 16</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>&gt; threshold</code></strong> — Greater-than predicate. <code>filter (> 10) numbers.</code></li>
-<li><strong><code>&lt; threshold</code></strong> — Less-than predicate.</li>
-<li><strong><code>&gt;= threshold</code></strong> — Greater-than-or-equal predicate.</li>
-<li><strong><code>&lt;= threshold</code></strong> — Less-than-or-equal predicate.</li>
-<li><strong><code>== value</code></strong> — Equality predicate (works for any type).</li>
-<li><strong><code>!= value</code></strong> — Inequality predicate.</li>
-<li><strong><code>not bool</code></strong> — Boolean negation.</li>
-<li><strong><code>and a b</code></strong> — Boolean and.</li>
-<li><strong><code>or a b</code></strong> — Boolean or.</li>
-</ul>
+<a name="//apple_ref/cpp/Function//" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">/</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Division. Infix: <code>a / b</code>. Returns a float.</div>
+    <div class="fn-example"><pre><code>echo (10 / 4).    # 2.5</code></pre></div>
+</div>
 
-<h3 id="higher-order-functions"><strong>Higher-Order Functions</strong></h3>
+<a name="//apple_ref/cpp/Function/mod" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">mod</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Integer modulo. Infix: <code>a mod b</code>.</div>
+    <div class="fn-example"><pre><code>echo (10 mod 3).    # 1</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>map fn list</code></strong> — Apply a function to each element and return the results.
-<br>Example: <code>map (* 2) [1, 2, 3].</code> → <code>[2, 4, 6]</code></li>
-</ul>
+<!-- ─── COMPARISON & LOGIC ───────────────────────────────────────────────── -->
+<h2 id="comparison">Comparison &amp; Logic</h2>
 
-<ul>
-<li><strong><code>filter fn list</code></strong> — Keep only elements for which the predicate is truthy.
-<br>Example: <code>filter (> 3) [1, 2, 3, 4, 5].</code> → <code>[4, 5]</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/==" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">==</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Equality. Works for any type. Infix: <code>a == b</code>.</div>
+    <div class="fn-example"><pre><code>echo (x == 5).
+is_five = == 5.
+echo (is_five 5).   # true</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>fold fn list</code></strong> — Reduce a non-empty list using a binary function.
-<br>The first element of the list is used as the initial accumulator.
-<br>Example: <code>fold + [1, 2, 3, 4].</code> → <code>10</code>
-<br><strong>Note</strong>: The list must be non-empty. There is no separate initial-value argument.</li>
-</ul>
+<a name="//apple_ref/cpp/Function/!=" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">!=</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Inequality. Infix: <code>a != b</code>.</div>
+</div>
 
-<ul>
-<li><strong><code>each fn list</code></strong> — Execute a function for side effects on each element; returns <code>null</code>.
-<br>Example: <code>each echo [1, 2, 3].</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/&gt;" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">&gt;</span> <span class="fn-params">threshold value</span></div>
+    <div class="fn-desc">Greater-than. Infix: <code>x &gt; n</code>. Curried prefix <code>(&gt; n)</code> is a predicate for values &gt; n &mdash; ideal with <code>filter</code>.</div>
+    <div class="fn-example"><pre><code>filter (&gt; 5) [1,3,6,8].  # [6, 8]
+echo (10 &gt; 5).            # true</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>progress val</code></strong> — Pass-through wrapper; returns its argument unchanged.
-<br>Example: <code>result = progress (wget "https://example.com/data").</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/&lt;" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">&lt;</span> <span class="fn-params">threshold value</span></div>
+    <div class="fn-desc">Less-than. Infix: <code>x &lt; n</code>.</div>
+</div>
 
-<h3 id="list-operations"><strong>List Operations</strong></h3>
+<a name="//apple_ref/cpp/Function/&gt;=" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">&gt;=</span> <span class="fn-params">threshold value</span></div>
+    <div class="fn-desc">Greater-than-or-equal.</div>
+</div>
 
-<ul>
-<li><strong><code>len list</code></strong> / <strong><code>len string</code></strong> — Element or character count.</li>
-<li><strong><code>head list</code></strong> — First element (errors on empty list).</li>
-<li><strong><code>tail list</code></strong> — Everything except the first element (errors on empty list).</li>
-<li><strong><code>append list elem</code></strong> — Add an element to the end of a list.</li>
-<li><strong><code>prepend elem list</code></strong> — Add an element to the front of a list.</li>
-<li><strong><code>concat a b</code></strong> — Concatenate two lists, or two strings.</li>
-<li><strong><code>reverse list</code></strong> — Reverse a list or string.</li>
-<li><strong><code>sort list</code></strong> — Sort a list (numbers by value; strings lexicographically).</li>
-<li><strong><code>range start end</code></strong> — List of integers <code>[start, end)</code>. Example: <code>range 1 5.</code> → <code>[1, 2, 3, 4]</code></li>
-<li><strong><code>zip a b</code></strong> — Pair elements from two lists; length equals the shorter of the two.</li>
-<li><strong><code>flatten list</code></strong> — Remove one level of nesting.</li>
-<li><strong><code>contains collection elem</code></strong> — True if a list contains an element, a string contains a substring, or a dict has a key.</li>
-</ul>
+<a name="//apple_ref/cpp/Function/&lt;=" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">&lt;=</span> <span class="fn-params">threshold value</span></div>
+    <div class="fn-desc">Less-than-or-equal.</div>
+</div>
 
-<h3 id="string-operations"><strong>String Operations</strong></h3>
+<a name="//apple_ref/cpp/Function/not" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">not</span> <span class="fn-params">bool</span></div>
+    <div class="fn-desc">Boolean negation.</div>
+    <div class="fn-example"><pre><code>echo (not false).   # true
+echo (not 0).       # true</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>trim s</code></strong> — Remove leading and trailing spaces.</li>
-<li><strong><code>split sep s</code></strong> — Split string on a separator; returns a list of strings.</li>
-<li><strong><code>join sep list</code></strong> — Join a list of values into a string with the given separator.</li>
-<li><strong><code>replace old new s</code></strong> — Replace all occurrences of <code>old</code> with <code>new</code> in <code>s</code>.</li>
-<li><strong><code>upper s</code></strong> — Convert to uppercase (ASCII letters only).</li>
-<li><strong><code>lower s</code></strong> — Convert to lowercase (ASCII letters only).</li>
-<li><strong><code>startswith prefix s</code></strong> — True if <code>s</code> starts with <code>prefix</code>.</li>
-<li><strong><code>endswith suffix s</code></strong> — True if <code>s</code> ends with <code>suffix</code>.</li>
-<li><strong><code>grep pattern s</code></strong> — Return a list of lines in <code>s</code> that contain <code>pattern</code> as a substring.</li>
-<li><strong><code>lines s</code></strong> — Split a string into a list of lines.</li>
-<li><strong><code>unlines list</code></strong> — Join a list of strings with newlines.</li>
-<li><strong><code>words s</code></strong> — Split a string on whitespace.</li>
-<li><strong><code>unwords list</code></strong> — Join a list of strings with spaces.</li>
-</ul>
+<a name="//apple_ref/cpp/Function/and" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">and</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Boolean and. Infix: <code>a and b</code>.</div>
+</div>
 
-<h3 id="dict-operations"><strong>Dict Operations</strong></h3>
+<a name="//apple_ref/cpp/Function/or" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">or</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Boolean or. Infix: <code>a or b</code>.</div>
+</div>
 
-<ul>
-<li><strong><code>keys dict</code></strong> — Return a list of all keys (strings).</li>
-<li><strong><code>values dict</code></strong> — Return a list of all values.</li>
-<li><strong><code>set dict key value</code></strong> — Return a new dict with the given key set to value.  Also works on lists: <code>set list index value</code> (1-based).</li>
-<li><strong><code>has dict key</code></strong> — True if the key exists in the dict.</li>
-<li><strong><code>delete dict key</code></strong> — Return a new dict with the key removed.</li>
-<li><strong><code>merge a b</code></strong> — Merge two dicts; conflicting keys take the value from <code>b</code>.</li>
-</ul>
+<!-- ─── HIGHER-ORDER ─────────────────────────────────────────────────────── -->
+<h2 id="higher-order">Higher-Order Functions</h2>
 
-<p><strong>Accessing <code>sh</code> result fields</strong>: <code>result|exitcode</code>, <code>result|stdout</code>, <code>result|stderr</code>.</p>
+<a name="//apple_ref/cpp/Function/map" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">map</span> <span class="fn-params">fn list</span></div>
+    <div class="fn-desc">Apply a function to each element. Also works on strings (character-by-character).</div>
+    <div class="fn-example"><pre><code>map (* 2) [1, 2, 3].              # [2, 4, 6]
+[1,2,3] |&gt; map (* 10) |&gt; echo.   # [10, 20, 30]</code></pre></div>
+</div>
 
-<h3 id="type-conversion"><strong>Type Conversion</strong></h3>
+<a name="//apple_ref/cpp/Function/filter" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">filter</span> <span class="fn-params">fn list</span></div>
+    <div class="fn-desc">Keep only elements for which the predicate returns truthy. Also works on strings.</div>
+    <div class="fn-example"><pre><code>filter (&gt; 3) [1, 2, 3, 4, 5].    # [4, 5]</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>num value</code></strong> — Convert a string or bool to a number.
-<br>Example: <code>num "42.5".</code> → <code>42.5</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/fold" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig">
+        <span class="fn-name">fold</span> <span class="fn-params">fn list</span><br>
+        <span class="fn-name">fold</span> <span class="fn-params">fn init list</span>
+    </div>
+    <div class="fn-desc">
+        Reduce a list with a binary function.<br>
+        <strong>2-arg:</strong> uses the first element as the initial accumulator (list must be non-empty).<br>
+        <strong>3-arg:</strong> explicit initial accumulator.
+    </div>
+    <div class="fn-example"><pre><code>fold + [1, 2, 3, 4].       # 10  (first elem is init)
+fold + 0 [1, 2, 3, 4].    # 10  (explicit init)
+fold + 100 [1, 2, 3].     # 106</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>str value</code></strong> — Convert any value to its string representation.
-<br>Example: <code>str 123.</code> → <code>"123"</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/each" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">each</span> <span class="fn-params">fn list</span></div>
+    <div class="fn-desc">Execute a function for side effects on each element. Returns <code>null</code>.</div>
+    <div class="fn-example"><pre><code>each echo [1, 2, 3].    # prints 1, 2, 3</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>bool value</code></strong> — Convert any value to boolean using Sol truthiness rules.
-<br>Example: <code>bool 0.</code> → <code>false</code> ; <code>bool "hi".</code> → <code>true</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/progress" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">progress</span> <span class="fn-params">fn args&hellip;</span></div>
+    <div class="fn-desc">
+        Wraps slow operations with a progress indicator.<br>
+        &bull; <code>wget</code>: shows curl&rsquo;s <code>--progress-bar</code> on stderr.<br>
+        &bull; <code>cp</code>: uses <code>pv</code> if installed, otherwise prints a notice.
+    </div>
+    <div class="fn-example"><pre><code>content = progress (wget "https://example.com/large.tar.gz").
+progress (cp "big.iso" "/backup/big.iso").</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>type value</code></strong> — Return the type name as a string.
-<br>Possible values: <code>"number"</code>, <code>"string"</code>, <code>"bool"</code>, <code>"null"</code>, <code>"list"</code>, <code>"dict"</code>, <code>"function"</code>.
-<br>Example: <code>type [1, 2].</code> → <code>"list"</code></li>
-</ul>
+<!-- ─── LISTS ────────────────────────────────────────────────────────────── -->
+<h2 id="lists">List Operations</h2>
 
-<p><strong>Truthiness rules</strong>: <code>false</code>, <code>null</code>, <code>0</code>, <code>""</code>, <code>[]</code>, and <code>{}</code> are falsy. Everything else is truthy.</p>
+<a name="//apple_ref/cpp/Function/len" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">len</span> <span class="fn-params">list|string|dict</span></div>
+    <div class="fn-desc">Number of elements, characters, or keys.</div>
+    <div class="fn-example"><pre><code>echo (len [1,2,3]).     # 3
+echo (len "hello").    # 5</code></pre></div>
+</div>
 
-<h3 id="data-processing"><strong>Data Processing</strong></h3>
+<a name="//apple_ref/cpp/Function/head" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">head</span> <span class="fn-params">list</span></div>
+    <div class="fn-desc">First element. Errors on an empty list.</div>
+    <div class="fn-example"><pre><code>echo (head [3, 1, 4]).   # 3</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>jsonread path</code></strong> — Read and parse a JSON file into Sol data structures.
-<br>Example: <code>config = jsonread "settings.json".</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/tail" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">tail</span> <span class="fn-params">list</span></div>
+    <div class="fn-desc">Everything except the first element. Errors on empty list.</div>
+    <div class="fn-example"><pre><code>echo (tail [3, 1, 4]).   # [1, 4]</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>jsonwrite data path</code></strong> — Serialize Sol data to JSON and write to a file.
-<br>Example: <code>jsonwrite config "settings.json".</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/append" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">append</span> <span class="fn-params">list elem</span></div>
+    <div class="fn-desc">Return a new list with <code>elem</code> appended to the end.</div>
+    <div class="fn-example"><pre><code>echo (append [1,2] 3).   # [1, 2, 3]</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>jsonparse json_string</code></strong> — Parse a JSON string into Sol data structures.
-<br>Example: <code>data = jsonparse raw'{"name":"Sol"}'.</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/prepend" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">prepend</span> <span class="fn-params">elem list</span></div>
+    <div class="fn-desc">Return a new list with <code>elem</code> added at the front.</div>
+    <div class="fn-example"><pre><code>echo (prepend 0 [1,2]).   # [0, 1, 2]</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>jsonstringify data</code></strong> — Convert Sol data to a JSON string.
-<br>Example: <code>json = jsonstringify {name: "Sol"}.</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/concat" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">concat</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Concatenate two lists, or two strings.</div>
+    <div class="fn-example"><pre><code>echo (concat [1,2] [3,4]).    # [1, 2, 3, 4]
+echo (concat "he" "llo").     # hello</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>csvread path</code></strong> — Read a CSV file. Returns a list of lists (rows of string columns), comma-delimited.
-<br>Example: <code>rows = csvread "data.csv".</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/reverse" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">reverse</span> <span class="fn-params">list|string</span></div>
+    <div class="fn-desc">Reverse a list or string.</div>
+    <div class="fn-example"><pre><code>echo (reverse [1,2,3]).   # [3, 2, 1]</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>csvwrite rows path</code></strong> — Write a list of lists to a CSV file.
-<br>Example: <code>csvwrite rows "output.csv".</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/sort" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">sort</span> <span class="fn-params">list</span></div>
+    <div class="fn-desc">Sort a list. Numbers numerically; strings lexicographically.</div>
+    <div class="fn-example"><pre><code>echo (sort [3,1,4,1,5]).   # [1, 1, 3, 4, 5]</code></pre></div>
+</div>
 
-<h3 id="web-and-network-operations"><strong>Web and Network Operations</strong></h3>
+<a name="//apple_ref/cpp/Function/range" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">range</span> <span class="fn-params">start end</span></div>
+    <div class="fn-desc">List of integers <code>[start, end)</code> (exclusive upper bound).</div>
+    <div class="fn-example"><pre><code>echo (range 1 5).   # [1, 2, 3, 4]</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>wget url</code></strong> / <strong><code>get url</code></strong> — Download content from a URL (delegates to system <code>curl</code>).
-<br>Returns the response body as a string.
-<br>Example: <code>body = wget "https://api.github.com/users/octocat".</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/zip" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">zip</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Pair elements from two lists. Result length equals the shorter list.</div>
+    <div class="fn-example"><pre><code>echo (zip [1,2,3] [4,5,6]).   # [[1,4],[2,5],[3,6]]</code></pre></div>
+</div>
 
-<h3 id="shell-operations"><strong>Shell Integration</strong></h3>
+<a name="//apple_ref/cpp/Function/flatten" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">flatten</span> <span class="fn-params">list</span></div>
+    <div class="fn-desc">Remove one level of nesting from a list of lists.</div>
+    <div class="fn-example"><pre><code>echo (flatten [[1,2],[3,4]]).   # [1, 2, 3, 4]</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>sh command</code></strong> — Execute a shell command via <code>sh -c</code>.
-<br>Returns a dict with three fields:
-<ul>
-  <li><code>exitcode</code> — number (0 = success)</li>
-  <li><code>stdout</code> — standard output as a string</li>
-  <li><code>stderr</code> — standard error as a string</li>
-</ul>
-<pre><code class="sol">result = sh "ls -la".
+<a name="//apple_ref/cpp/Function/contains" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">contains</span> <span class="fn-params">collection elem</span></div>
+    <div class="fn-desc">True if a list contains an element, a string contains a substring, or a dict contains a key.</div>
+    <div class="fn-example"><pre><code>echo (contains [1,2,3] 2).       # true
+echo (contains "hello" "ell").   # true
+echo (contains {a:1} "a").       # true</code></pre></div>
+</div>
+
+<!-- ─── STRINGS ──────────────────────────────────────────────────────────── -->
+<h2 id="strings">String Operations</h2>
+
+<a name="//apple_ref/cpp/Function/trim" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">trim</span> <span class="fn-params">s</span></div>
+    <div class="fn-desc">Remove leading and trailing spaces.</div>
+    <div class="fn-example"><pre><code>echo (trim "  hello  ").   # hello</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/split" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">split</span> <span class="fn-params">sep s</span></div>
+    <div class="fn-desc">Split a string on a separator. Returns a list of strings.</div>
+    <div class="fn-example"><pre><code>echo (split "," "a,b,c").   # ["a", "b", "c"]</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/join" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">join</span> <span class="fn-params">sep list</span></div>
+    <div class="fn-desc">Join a list of values into a string with the given separator.</div>
+    <div class="fn-example"><pre><code>echo (join "-" ["a","b","c"]).   # a-b-c</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/replace" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">replace</span> <span class="fn-params">old new s</span></div>
+    <div class="fn-desc">Replace all occurrences of <code>old</code> with <code>new</code> in string <code>s</code>.</div>
+    <div class="fn-example"><pre><code>echo (replace "o" "0" "hello world").   # hell0 w0rld</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/upper" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">upper</span> <span class="fn-params">s</span></div>
+    <div class="fn-desc">Convert to uppercase (ASCII letters only).</div>
+    <div class="fn-example"><pre><code>echo (upper "hello").   # HELLO</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/lower" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">lower</span> <span class="fn-params">s</span></div>
+    <div class="fn-desc">Convert to lowercase (ASCII letters only).</div>
+    <div class="fn-example"><pre><code>echo (lower "HELLO").   # hello</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/startswith" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">startswith</span> <span class="fn-params">prefix s</span></div>
+    <div class="fn-desc">True if <code>s</code> starts with <code>prefix</code>.</div>
+    <div class="fn-example"><pre><code>echo (startswith "he" "hello").   # true</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/endswith" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">endswith</span> <span class="fn-params">suffix s</span></div>
+    <div class="fn-desc">True if <code>s</code> ends with <code>suffix</code>.</div>
+    <div class="fn-example"><pre><code>echo (endswith "lo" "hello").   # true</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/grep" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">grep</span> <span class="fn-params">pattern s</span></div>
+    <div class="fn-desc">Return a list of lines from <code>s</code> that contain <code>pattern</code> as a substring.</div>
+    <div class="fn-example"><pre><code>grep "err" "ok
+error line
+done".   # ["error line"]</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/lines" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">lines</span> <span class="fn-params">s</span></div>
+    <div class="fn-desc">Split a string into a list of lines.</div>
+    <div class="fn-example"><pre><code>echo (lines "a\nb\nc").   # ["a", "b", "c"]</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/unlines" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">unlines</span> <span class="fn-params">list</span></div>
+    <div class="fn-desc">Join a list of strings with newlines.</div>
+</div>
+
+<a name="//apple_ref/cpp/Function/words" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">words</span> <span class="fn-params">s</span></div>
+    <div class="fn-desc">Split a string on whitespace.</div>
+    <div class="fn-example"><pre><code>echo (words "hello world").   # ["hello", "world"]</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/unwords" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">unwords</span> <span class="fn-params">list</span></div>
+    <div class="fn-desc">Join a list of strings with spaces.</div>
+    <div class="fn-example"><pre><code>echo (unwords ["hello","world"]).   # hello world</code></pre></div>
+</div>
+
+<!-- ─── DICTS ────────────────────────────────────────────────────────────── -->
+<h2 id="dicts">Dict Operations</h2>
+
+<a name="//apple_ref/cpp/Function/keys" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">keys</span> <span class="fn-params">dict</span></div>
+    <div class="fn-desc">Return a list of all keys (strings).</div>
+    <div class="fn-example"><pre><code>echo (keys {a:1, b:2}).   # ["a", "b"]</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/values" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">values</span> <span class="fn-params">dict</span></div>
+    <div class="fn-desc">Return a list of all values.</div>
+    <div class="fn-example"><pre><code>echo (values {a:1, b:2}).   # [1, 2]</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/set" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">set</span> <span class="fn-params">dict key value</span></div>
+    <div class="fn-desc">Return a new dict with <code>key</code> set to <code>value</code>. Also works on lists with a numeric 1-based index.</div>
+    <div class="fn-example"><pre><code>d2 = set {a:1} "b" 2.     # {a: 1, b: 2}
+
+xs = [10, 20, 30].
+xs2 = set xs 2 99.        # [10, 99, 30]</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/get" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">get</span> <span class="fn-params">dict key</span></div>
+    <div class="fn-desc">Get a value from a dict by key. Returns <code>null</code> if absent. (When passed a URL string, behaves as an alias for <code>wget</code>.)</div>
+    <div class="fn-example"><pre><code>echo (get {a:1} "a").   # 1
+echo (get {a:1} "z").   # null</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/has" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">has</span> <span class="fn-params">dict key</span></div>
+    <div class="fn-desc">True if the key exists in the dict.</div>
+    <div class="fn-example"><pre><code>echo (has {a:1} "a").   # true</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/delete" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">delete</span> <span class="fn-params">dict key</span></div>
+    <div class="fn-desc">Return a new dict with the key removed.</div>
+    <div class="fn-example"><pre><code>echo (delete {a:1, b:2} "b").   # {a: 1}</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/merge" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">merge</span> <span class="fn-params">a b</span></div>
+    <div class="fn-desc">Merge two dicts. Conflicting keys take the value from <code>b</code>.</div>
+    <div class="fn-example"><pre><code>echo (merge {a:1,b:2} {b:99,c:3}).   # {a:1, b:99, c:3}</code></pre></div>
+</div>
+
+<!-- ─── TYPE CONVERSION ──────────────────────────────────────────────────── -->
+<h2 id="type-conversion">Type Conversion</h2>
+
+<p><strong>Truthiness:</strong> <code>false</code>, <code>null</code>, <code>0</code>, <code>""</code>, <code>[]</code>, <code>{}</code> are falsy. Everything else is truthy.</p>
+
+<a name="//apple_ref/cpp/Function/str" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">str</span> <span class="fn-params">value</span></div>
+    <div class="fn-desc">Convert any value to its string representation.</div>
+    <div class="fn-example"><pre><code>echo (str 42).       # 42
+echo (str [1,2]).    # [1, 2]</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/num" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">num</span> <span class="fn-params">value</span></div>
+    <div class="fn-desc">Convert a string or bool to a number.</div>
+    <div class="fn-example"><pre><code>echo (num "3.14").   # 3.14
+echo (num true).     # 1</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/bool" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">bool</span> <span class="fn-params">value</span></div>
+    <div class="fn-desc">Convert any value to boolean using Sol truthiness rules.</div>
+    <div class="fn-example"><pre><code>echo (bool 0).     # false
+echo (bool "hi").  # true</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/type" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">type</span> <span class="fn-params">value</span></div>
+    <div class="fn-desc">Return the type name: <code>"number"</code>, <code>"string"</code>, <code>"bool"</code>, <code>"null"</code>, <code>"list"</code>, <code>"dict"</code>, <code>"function"</code>.</div>
+    <div class="fn-example"><pre><code>echo (type 42).      # number
+echo (type "hi").    # string
+echo (type []).      # list</code></pre></div>
+</div>
+
+<!-- ─── FILESYSTEM ────────────────────────────────────────────────────────── -->
+<h2 id="filesystem">Filesystem</h2>
+
+<a name="//apple_ref/cpp/Function/read" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">read</span> <span class="fn-params">path</span></div>
+    <div class="fn-desc">Read file contents as a string. Errors if the file does not exist.</div>
+    <div class="fn-example"><pre><code>content = read "config.txt".</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/write" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">write</span> <span class="fn-params">path content</span></div>
+    <div class="fn-desc">Write a string to a file, creating it if needed.</div>
+    <div class="fn-example"><pre><code>write "output.txt" "Hello Sol!".</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/cp" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">cp</span> <span class="fn-params">src dst</span></div>
+    <div class="fn-desc">Copy a file from <code>src</code> to <code>dst</code>. Combine with <code>progress</code> for a progress bar via <code>pv</code>.</div>
+    <div class="fn-example"><pre><code>cp "source.txt" "backup.txt".
+progress (cp "big.iso" "/backup/big.iso").</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/ls" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">ls</span> <span class="fn-params">path?</span></div>
+    <div class="fn-desc">List directory contents as a list of filenames. Defaults to current directory.</div>
+    <div class="fn-example"><pre><code>each echo (ls "src").
+each echo (ls).</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/mkdir" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">mkdir</span> <span class="fn-params">path</span></div>
+    <div class="fn-desc">Create a directory including any missing parents.</div>
+    <div class="fn-example"><pre><code>mkdir "project/src/utils".</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/rm" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">rm</span> <span class="fn-params">path</span></div>
+    <div class="fn-desc">Remove a file, or recursively remove a directory.</div>
+    <div class="fn-example"><pre><code>rm "temp.txt".
+rm "build/".</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/exists" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">exists</span> <span class="fn-params">path</span></div>
+    <div class="fn-desc">True if a file or directory exists at the given path.</div>
+    <div class="fn-example"><pre><code>if exists "config.json" then echo "found" else echo "missing".</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/cwd" class="dashAnchor"></a>
+<a name="//apple_ref/cpp/Function/pwd" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">cwd</span> &nbsp;/&nbsp; <span class="fn-name">pwd</span></div>
+    <div class="fn-desc">Return the current working directory. Zero-arity &mdash; no parentheses needed.</div>
+    <div class="fn-example"><pre><code>echo cwd.
+echo pwd.</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/name" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">name</span> <span class="fn-params">path</span></div>
+    <div class="fn-desc">Return the filename component of a path.</div>
+    <div class="fn-example"><pre><code>echo (name "/home/user/file.txt").   # file.txt</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/ext" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">ext</span> <span class="fn-params">path</span></div>
+    <div class="fn-desc">Return the file extension including the dot.</div>
+    <div class="fn-example"><pre><code>echo (ext "archive.tar.gz").   # .gz</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/dir" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">dir</span> <span class="fn-params">path</span></div>
+    <div class="fn-desc">Return the directory component of a path.</div>
+    <div class="fn-example"><pre><code>echo (dir "/home/user/file.txt").   # /home/user</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/path" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">path</span> <span class="fn-params">base child</span></div>
+    <div class="fn-desc">Join two path segments.</div>
+    <div class="fn-example"><pre><code>echo (path "/home/user" "docs").   # /home/user/docs</code></pre></div>
+</div>
+
+<a name="//apple_ref/cpp/Function/place" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">place</span> <span class="fn-params">src destdir</span></div>
+    <div class="fn-desc">Copy a file into a destination directory (retaining the filename). Returns the full destination path.</div>
+    <div class="fn-example"><pre><code>dest = place "README.md" "dist".
+echo "Placed at: {dest}".</code></pre></div>
+</div>
+
+<!-- ─── SHELL & ENV ──────────────────────────────────────────────────────── -->
+<h2 id="shell">Shell &amp; Environment</h2>
+
+<a name="//apple_ref/cpp/Function/sh" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">sh</span> <span class="fn-params">command</span></div>
+    <div class="fn-desc">
+        Execute a shell command via <code>sh -c</code>. Returns a dict with:
+        <code>exitcode</code>, <code>stdout</code>, <code>stderr</code>.
+    </div>
+    <div class="fn-example"><pre><code>result = sh "git status".
 echo result|exitcode.
-echo result|stdout.</code></pre></li>
-</ul>
+echo result|stdout.
 
-<ul>
-<li><strong><code>getenv name</code></strong> — Get an environment variable.  Returns the value as a string, or <code>null</code> if the variable is not set.
-<br>Example: <code>home = getenv "HOME" |> unwrap_or "/tmp".</code></li>
-</ul>
+sh "make build" |&gt; unwrap_or_exit "Build failed".</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>setenv name value</code></strong> — Set an environment variable for the current process.
-<br>Example: <code>setenv "DEBUG" "1".</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/getenv" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">getenv</span> <span class="fn-params">name</span></div>
+    <div class="fn-desc">Get an environment variable. Returns the string value, or <code>null</code> if not set.</div>
+    <div class="fn-example"><pre><code>home = getenv "HOME" |&gt; unwrap_or "/tmp".
+token = getenv "API_TOKEN" |&gt; unwrap_or_exit "API_TOKEN required".</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>sha256 text</code></strong> — SHA-256 hash (delegates to system <code>shasum</code> / <code>sha256sum</code>).
-<br>Example: <code>hash = sha256 "hello".</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/setenv" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">setenv</span> <span class="fn-params">name value</span></div>
+    <div class="fn-desc">Set an environment variable for the current process. Does not propagate to parent shells.</div>
+    <div class="fn-example"><pre><code>setenv "DEBUG" "1".</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>md5 text</code></strong> — MD5 hash (delegates to system <code>md5</code>).
-<br>Example: <code>hash = md5 "hello".</code></li>
-</ul>
+<!-- ─── RESULT HELPERS ───────────────────────────────────────────────────── -->
+<h2 id="results">Result Helpers</h2>
 
-<h3 id="result-type-operations"><strong>Result Helpers</strong></h3>
+<a name="//apple_ref/cpp/Function/succeeded" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">succeeded</span> <span class="fn-params">val</span></div>
+    <div class="fn-desc">True if <code>val</code> is a <code>sh</code> result dict with <code>exitcode == 0</code>.</div>
+    <div class="fn-example"><pre><code>echo (succeeded (sh "true")).    # true
+echo (succeeded (sh "false")).   # false</code></pre></div>
+</div>
 
-<p>Sol does not have a separate Result type. <code>sh</code> returns a dict and <code>getenv</code> returns <code>null</code> when unset. The helpers below work on both.</p>
+<a name="//apple_ref/cpp/Function/failed" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">failed</span> <span class="fn-params">val</span></div>
+    <div class="fn-desc">True if <code>val</code> is a <code>sh</code> result dict with a non-zero <code>exitcode</code>.</div>
+</div>
 
-<ul>
-<li><strong><code>failed val</code></strong> — True if <code>val</code> is a <code>sh</code> result dict with a non-zero <code>exitcode</code>.
-<br>Example: <code>failed (sh "false") |> echo.</code> → <code>true</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/unwrap_or" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">unwrap_or</span> <span class="fn-params">default val</span></div>
+    <div class="fn-desc">Return <code>val</code> if it is not <code>null</code> and not a failed <code>sh</code> result; otherwise return <code>default</code>.</div>
+    <div class="fn-example"><pre><code>home = getenv "HOME" |&gt; unwrap_or "/tmp".
+ver  = sh "git describe" |&gt; unwrap_or "unknown".</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>succeeded val</code></strong> — Opposite of <code>failed</code>.
-<br>Example: <code>succeeded (sh "true") |> echo.</code> → <code>true</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/unwrap_or_exit" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">unwrap_or_exit</span> <span class="fn-params">message val</span></div>
+    <div class="fn-desc">Return <code>val</code> if not null/failed; otherwise print <code>message</code> to stderr and exit with code 1.</div>
+    <div class="fn-example"><pre><code>getenv "TOKEN" |&gt; unwrap_or_exit "TOKEN is required".
+sh "make" |&gt; unwrap_or_exit "Build failed".</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>unwrap_or default val</code></strong> — Return <code>val</code> if it is not <code>null</code> and not a failed sh result; otherwise return <code>default</code>.
-<br>Example: <code>home = getenv "HOME" |> unwrap_or "/tmp".</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/stdout" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">stdout</span> <span class="fn-params">result</span></div>
+    <div class="fn-desc">Extract the <code>stdout</code> field from a <code>sh</code> result dict.</div>
+    <div class="fn-example"><pre><code>out = sh "date" |&gt; stdout.
+echo out.</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>unwrap_or_exit message val</code></strong> — Return <code>val</code> if not null/failed; otherwise print <code>message</code> to stderr and exit with code 1.
-<br>Example: <code>getenv "TOKEN" |> unwrap_or_exit "TOKEN is required".</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/stderr_str" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">stderr_str</span> <span class="fn-params">result</span></div>
+    <div class="fn-desc">Extract the <code>stderr</code> field from a <code>sh</code> result dict.</div>
+</div>
 
-<ul>
-<li><strong><code>stdout val</code></strong> — Extract the <code>stdout</code> field from a <code>sh</code> result dict.
-<br>Example: <code>out = sh "date" |> stdout.</code></li>
-</ul>
+<!-- ─── DATA ─────────────────────────────────────────────────────────────── -->
+<h2 id="data">Data &mdash; JSON &amp; CSV</h2>
 
-<ul>
-<li><strong><code>stderr_str val</code></strong> — Extract the <code>stderr</code> field from a <code>sh</code> result dict.</li>
-</ul>
+<a name="//apple_ref/cpp/Function/jsonread" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">jsonread</span> <span class="fn-params">path</span></div>
+    <div class="fn-desc">Read and parse a JSON file into Sol data structures.</div>
+    <div class="fn-example"><pre><code>config = jsonread "settings.json".
+echo config|version.</code></pre></div>
+</div>
 
-<h3 id="utilities"><strong>Utilities</strong></h3>
+<a name="//apple_ref/cpp/Function/jsonwrite" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">jsonwrite</span> <span class="fn-params">data path</span></div>
+    <div class="fn-desc">Serialize Sol data to JSON and write to a file.</div>
+    <div class="fn-example"><pre><code>jsonwrite {name: "Sol", ver: "1.0"} "meta.json".</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>echo value</code></strong> / <strong><code>print value</code></strong> — Print a value to stdout followed by a newline.
-<br>Example: <code>echo "Hello World".</code></li>
-</ul>
+<a name="//apple_ref/cpp/Function/jsonparse" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">jsonparse</span> <span class="fn-params">json_string</span></div>
+    <div class="fn-desc">Parse a JSON string into Sol data structures.</div>
+    <div class="fn-example"><pre><code>data = jsonparse raw'{"x":1}'.
+echo data|x.   # 1</code></pre></div>
+</div>
 
-<ul>
-<li><strong><code>exit</code></strong> — Exit with code 0.</li>
-<li><strong><code>exit code</code></strong> — Exit with the given numeric exit code.</li>
-</ul>
+<a name="//apple_ref/cpp/Function/jsonstringify" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">jsonstringify</span> <span class="fn-params">data</span></div>
+    <div class="fn-desc">Convert Sol data to a JSON string.</div>
+    <div class="fn-example"><pre><code>json = jsonstringify {name: "Sol"}.
+echo json.   # {"name":"Sol"}</code></pre></div>
+</div>
 
-<h3><strong>Pipeline Operator</strong></h3>
+<a name="//apple_ref/cpp/Function/csvread" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">csvread</span> <span class="fn-params">path</span></div>
+    <div class="fn-desc">Read a CSV file. Returns a list of rows; each row is a list of strings.</div>
+    <div class="fn-example"><pre><code>rows = csvread "data.csv".
+echo rows|1.       # first row
+echo rows|1|1.     # first row, first column</code></pre></div>
+</div>
 
-<p>The pipeline operator <code>|&gt;</code> chains function calls left-to-right.  The accumulated value is passed as the <strong>last</strong> argument to the next stage.</p>
+<a name="//apple_ref/cpp/Function/csvwrite" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">csvwrite</span> <span class="fn-params">rows path</span></div>
+    <div class="fn-desc">Write a list of lists to a CSV file.</div>
+    <div class="fn-example"><pre><code>csvwrite [["name","age"],["Alice","30"]] "out.csv".</code></pre></div>
+</div>
 
-<strong>Syntax</strong>: <code>value |&gt; function |&gt; function arg |&gt; function</code>
+<!-- ─── NETWORK ──────────────────────────────────────────────────────────── -->
+<h2 id="network">Network</h2>
 
-<pre><code class="sol"># Simple pipeline
-[1, 2, 3, 4, 5] |> map (* 2) |> filter (> 5) |> echo.
+<a name="//apple_ref/cpp/Function/wget" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">wget</span> <span class="fn-params">url</span></div>
+    <div class="fn-desc">Download content from a URL using system <code>curl</code>. Returns the response body as a string. <code>get url</code> is an alias.</div>
+    <div class="fn-example"><pre><code>html = wget "https://example.com".
+body = get "https://api.example.com/data".
+content = progress (wget "https://example.com/file.tar.gz").</code></pre></div>
+</div>
 
-# Environment variable with fallback
-getenv "HOME" |> unwrap_or "/tmp" |> echo.
+<!-- ─── HASHING ──────────────────────────────────────────────────────────── -->
+<h2 id="hashing">Hashing</h2>
 
-# Shell command pipeline
-sh "ls" |> stdout |> echo.
+<a name="//apple_ref/cpp/Function/sha256" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">sha256</span> <span class="fn-params">text</span></div>
+    <div class="fn-desc">SHA-256 hex digest. Delegates to <code>shasum -a 256</code> or <code>sha256sum</code>.</div>
+    <div class="fn-example"><pre><code>hash = sha256 "hello world".
+echo hash.</code></pre></div>
+</div>
 
-# Data processing
-[1,2,3,4,5] |> map (+ 10) |> filter (> 12) |> fold + |> echo.</code></pre>
+<a name="//apple_ref/cpp/Function/md5" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">md5</span> <span class="fn-params">text</span></div>
+    <div class="fn-desc">MD5 hex digest. Delegates to <code>md5</code>.</div>
+    <div class="fn-example"><pre><code>digest = md5 "hello".</code></pre></div>
+</div>
 
-<h2 id="usage">USAGE</h2>
+<!-- ─── PROCESS ──────────────────────────────────────────────────────────── -->
+<h2 id="process">Process</h2>
 
-<h3 id="script-execution">Script Execution</h3>
+<a name="//apple_ref/cpp/Function/exit" class="dashAnchor"></a>
+<div class="fn-entry">
+    <div class="fn-sig"><span class="fn-name">exit</span> &nbsp;&nbsp; <span class="fn-name">exit</span> <span class="fn-params">code</span></div>
+    <div class="fn-desc">Exit the process. With no argument exits with code 0. With a numeric argument exits with that code.</div>
+    <div class="fn-example"><pre><code>exit.      # exit 0
+exit 1.    # exit 1</code></pre></div>
+</div>
 
-<pre><code class="bash">sol script.sol</code></pre>
+<!-- ================================================================ EXAMPLES -->
+<h2 id="examples">Examples</h2>
 
-<p>Or via Stack during development:</p>
-<pre><code class="bash">stack run -- script.sol</code></pre>
+<h3>Guards as a grading function</h3>
+<pre><code>score = 85.
+grade | score &gt; 90 = "A".
+grade | score &gt; 80 = "B".
+grade | score &gt; 70 = "C".
+grade              = "D".
+echo "Score {score} gets grade {grade}".</code></pre>
 
-<h3 id="interactive-mode">Interactive Mode (REPL)</h3>
+<h3>Data pipeline</h3>
+<pre><code>nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].
+result = nums |&gt; filter (&gt; 5) |&gt; map (* 2) |&gt; fold + 0.
+echo result.   # 90</code></pre>
 
-<pre><code class="bash">sol         # Start interactive REPL
-stack run   # Alternative during development</code></pre>
-
-<p>The REPL uses Haskeline for line editing with persistent history (<code>~/.sol_history</code>), Emacs/Vi key bindings, and multiline input. Press Ctrl-D or type <code>exit.</code> to quit.</p>
-
-<h3 id="inline-code">Inline Code</h3>
-
-<pre><code class="bash">sol -e 'echo "hello".'     # Run code from a command-line argument
-echo 'echo "hi".' | sol -  # Read program from stdin</code></pre>
-
-<h2 id="examples">EXAMPLES</h2>
-
-<h3 id="basic-operations"><strong>Basic Operations</strong></h3>
-
-<pre><code class="sol"># File and directory operations
-echo "Setting up project structure".
-mkdir "my_project".
-mkdir "my_project/src".
-mkdir "my_project/docs".
-
-# Write a configuration file
-config = {name: "MyProject", version: "1.0"}.
-jsonwrite config "my_project/config.json".
-
-# Read and display
-project_config = jsonread "my_project/config.json".
-echo "Project configuration:".
-echo project_config.</code></pre>
-
-<h3 id="pipelines-and-higher-order"><strong>Pipelines and Higher-Order Functions</strong></h3>
-
-<pre><code class="sol"># Pipeline operator for data transformations
-numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].
-numbers |> filter (> 5) |> map (* 2) |> fold + |> echo.
-# Output: 90
-
-# Environment variable with fallback
-home = getenv "HOME" |> unwrap_or "/tmp".
-echo "Home directory: {home}".
-
-# Required environment variable — exits if not set
-config_path = getenv "CONFIG_PATH" |> unwrap_or_exit "CONFIG_PATH must be set".
-
-# Shell command execution
-result = sh "ls -la".
-echo result|exitcode.
-echo result|stdout.</code></pre>
-
-<h3 id="data-processing-and-analysis"><strong>Data Processing and Analysis</strong></h3>
-
-<pre><code class="sol">data = [10, 25, 5, 30, 45, 15, 35].
-echo "Original data:".
-echo data.
-
-high_values = filter (> 20) data.
-doubled     = map (* 2) high_values.
-total       = fold + doubled.
-
-echo "High values (&gt;20):".
-echo high_values.
-echo "Doubled high values:".
-echo doubled.
-echo "Sum:".
-echo total.</code></pre>
-
-<h3 id="data-format-conversion"><strong>Data Format Conversion</strong></h3>
-
-<pre><code class="sol">sample_data = [
-  {name: "Alice",   age: 30, city: "New York"},
-  {name: "Bob",     age: 25, city: "San Francisco"},
-  {name: "Charlie", age: 35, city: "Chicago"}
-].
-
-# Write as JSON
-write "people.json" (jsonstringify sample_data).
-
-# Write as CSV
-csv_data = [
-  ["name", "age", "city"],
-  ["Alice", "30", "New York"],
-  ["Bob", "25", "San Francisco"],
-  ["Charlie", "35", "Chicago"]
-].
-csvwrite csv_data "people.csv".
-
-echo "Saved in JSON and CSV formats".</code></pre>
-
-<h3 id="nested-data-structure-manipulation"><strong>Nested Data Structures</strong></h3>
-
-<pre><code class="sol">company = {
-  name: "Tech Corp",
-  employees: [
-    {name: "Alice",   salary: 95000},
-    {name: "Bob",     salary: 75000},
-    {name: "Charlie", salary: 105000}
-  ],
-  locations: ["New York", "San Francisco", "Austin"]
-}.
-
-# Access with | chain (1-based indexing for lists)
-echo company|name.
-echo company|employees|1|name.
-echo company|locations|2.
-
-# Update a field (returns a new dict)
-employee1  = company|employees|1.
-updated    = set employee1 "salary" 100000.
-echo updated|salary.</code></pre>
-
-<h3 id="advanced-functional-programming"><strong>Functional Programming Patterns</strong></h3>
-
-<pre><code class="sol"># Reusable partial functions
-is_positive = > 0.
-double      = * 2.
-
-numbers   = [1, -2, 3, -4, 5, -6].
-positives = filter is_positive numbers.
-result    = map double positives |> fold +.
-echo result.
-
-# String processing pipeline
-csv_line = "  alice , bob , charlie  ".
-csv_line
-  |> split ","
-  |> map trim
-  |> map upper
-  |> echo.</code></pre>
-
-<h3 id="shell-workflow"><strong>Shell Workflow</strong></h3>
-
-<pre><code class="sol"># Check git status via shell
-result = sh "git status".
+<h3>Shell workflow with error handling</h3>
+<pre><code>result = sh "git status".
 if succeeded result
   then echo result|stdout
-  else echo "Not a git repo".
+  else echo "Not a git repository".
 
-# Download and parse JSON
-body = wget "https://api.github.com/repos/octocat/Hello-World".
-data = jsonparse body.
-echo data|name.</code></pre>
+version = sh "git describe --tags" |&gt; unwrap_or "0.0.0".
+echo "Version: {version}".</code></pre>
 
-<h2 id="implementation">IMPLEMENTATION</h2>
+<h3>JSON config processing</h3>
+<pre><code>config = jsonread "config.json".
+env = getenv "ENV" |&gt; unwrap_or "development".
+updated = set config "env" env.
+jsonwrite updated "config.json".
+echo "Config updated for {env}".</code></pre>
 
-<p>Sol is implemented in Haskell, organised into four modules:</p>
+<h3>Recursive Fibonacci with guards</h3>
+<pre><code>fib n | n == 0 = 0.
+fib n | n == 1 = 1.
+fib n           = (fib (n - 1)) + (fib (n - 2)).
+
+echo (fib 10).   # 55</code></pre>
+
+<!-- ================================================================ CLI USAGE -->
+<h2 id="usage">CLI Usage</h2>
+
+<pre><code>sol script.sol          # Run a .sol file
+sol -e 'echo "hi".'    # Run inline code
+sol -                  # Read program from stdin
+sol                    # Start the REPL</code></pre>
+
+<p>The REPL has persistent history at <code>~/.sol_history</code>, Emacs key bindings, and multiline input. Press <kbd>Ctrl-D</kbd> or type <code>exit.</code> to quit.</p>
+
+<!-- ============================================================ IMPLEMENTATION -->
+<h2 id="implementation">Implementation</h2>
+
+<p>Sol is written in Haskell, organised into four modules:</p>
 
 <ul>
-<li><strong><code>Sol.Syntax</code></strong> — Immutable AST types: <code>Expr</code>, <code>Stmt</code>, <code>Key</code></li>
-<li><strong><code>Sol.Parser</code></strong> — Megaparsec parser; entry point: <code>parseProgram :: String -&gt; Either SolParseError [Stmt]</code></li>
-<li><strong><code>Sol.Value</code></strong> — Runtime values (<code>SolVal</code>), environment type (<code>Env</code>), <code>showVal</code>, <code>isTruthy</code></li>
-<li><strong><code>Sol.Eval</code></strong> — Evaluator (<code>evalExpr</code>, <code>evalStmt</code>, <code>evalProg</code>), <code>apply</code>, <code>initialEnv</code></li>
+    <li><code>Sol.Syntax</code> &mdash; Immutable AST types: <code>Expr</code>, <code>Stmt</code>, <code>Key</code></li>
+    <li><code>Sol.Parser</code> &mdash; Megaparsec parser; entry: <code>parseProgram :: String -&gt; Either SolParseError [Stmt]</code></li>
+    <li><code>Sol.Value</code> &mdash; Runtime values (<code>SolVal</code>), environment (<code>Env</code>), <code>showVal</code>, <code>isTruthy</code></li>
+    <li><code>Sol.Eval</code> &mdash; Evaluator (<code>evalExpr</code>, <code>evalStmt</code>, <code>evalProg</code>), <code>apply</code>, <code>initialEnv</code></li>
 </ul>
 
-<p>The evaluator uses dynamic scope — the calling environment is threaded through every call. Functions defined with <code>f x = body.</code> capture no closure; they receive the environment at the call site.</p>
+<p>The evaluator uses <strong>dynamic scope</strong> &mdash; the calling environment is threaded through every function call. Functions capture no closure; they see the environment at the call site.</p>
 
-<h3 id="building">Building and Testing</h3>
+<pre><code>stack build          # build
+stack test           # run property-based test suite
+stack run            # start REPL
+stack run -- my.sol  # run a script</code></pre>
 
-<pre><code class="bash">stack build        # build library and executable
-stack test         # run the Hedgehog property-based test suite
-stack run          # start the REPL
-stack run -- sol script.sol  # run a script</code></pre>
-
-<h2 id="language-philosophy">PHILOSOPHY</h2>
-
-<p>Sol is designed around several core principles:</p>
-
-<ol>
-<li><strong>Readability First</strong> — Code should read like natural language</li>
-<li><strong>Minimal Syntax</strong> — Less cognitive overhead, more focus on problem-solving</li>
-<li><strong>Batteries Included</strong> — Rich standard library for common tasks</li>
-<li><strong>Functional Style</strong> — Encourage immutable data and function composition</li>
-<li><strong>Helpful Errors</strong> — Detailed error messages with context</li>
-<li><strong>Zero Setup</strong> — Single binary, no package manager required at runtime</li>
-</ol>
-
-<p>Sol bridges the gap between shell scripting and full programming languages, offering the simplicity of shell commands with the power and structure of modern functional programming.</p>
-
-        </main>
-    </div>
+</main>
+</div>
 </body>
 </html>
