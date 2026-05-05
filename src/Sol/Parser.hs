@@ -167,6 +167,51 @@ pParensCore = do
   _ <- char ')'
   return e
 
+-- ---------------------------------------------------------------------------
+-- Sigil parsers  ('atom  @flag  !flag)
+-- ---------------------------------------------------------------------------
+
+-- | 'word  bare atom: non-whitespace, non-dot characters after the quote
+pAtom' :: Parser Expr
+pAtom' = lexeme $ try $ do
+  _ <- char '\''
+  s <- some (alphaNumChar <|> char '-' <|> char '_' <|> char '/')
+  return (EAtom s)
+
+-- | @flag  boolean true sigil
+pFlagOn :: Parser Expr
+pFlagOn = lexeme $ try $ do
+  _ <- char '@'
+  s <- some (alphaNumChar <|> char '-' <|> char '_')
+  return (EFlag s True)
+
+-- | !flag  boolean false sigil
+pFlagOff :: Parser Expr
+pFlagOff = lexeme $ try $ do
+  _ <- char '!'
+  notFollowedBy (char '=')  -- don't steal !=
+  s <- some (alphaNumChar <|> char '-' <|> char '_')
+  return (EFlag s False)
+
+-- | x.y.z  parsed as EAccess (EVar "x") [KStr "y", KStr "z"]
+--   No whitespace between dots.  Falls back to plain EVar when no dots.
+pDottedIdent :: Parser Expr
+pDottedIdent = try $ do
+  first <- pIdentCore
+  rest  <- many (try (char '.' *> pIdentCore))
+  return $ case rest of
+    [] -> EVar first
+    ks -> EAccess (EVar first) (map KStr ks)
+
+-- | key:val  named argument in an argument list
+pNamedArg :: Parser Expr
+pNamedArg = lexeme $ try $ do
+  k <- pIdentCore
+  _ <- char ':'
+  notFollowedBy (char ':')  -- don't steal :: if added later
+  v <- pAtomIdx             -- RHS is a single atom (no operators, no pipeline)
+  return (ENamed k v)
+
 -- | Atomic expression without trailing whitespace
 pAtomCore :: Parser Expr
 pAtomCore =
@@ -176,7 +221,10 @@ pAtomCore =
       pDictCore,
       pStringLitCore,
       pNumCore,
-      EVar <$> pIdentCore
+      pAtom',
+      pFlagOn,
+      pFlagOff,
+      pDottedIdent
     ]
 
 -- ---------------------------------------------------------------------------
@@ -254,11 +302,13 @@ operatorTable =
 -- ---------------------------------------------------------------------------
 
 -- | A greedy application: first atom is the function, rest are arguments.
+--   Named args (key:val) are tried before plain atoms in both head and tail
+--   positions so they can appear inside list literals too.
 --   This is the base "term" for makeExprParser.
 pApp :: Parser Expr
 pApp = do
-  h <- pAtomIdx
-  tl <- many pAtomIdx
+  h  <- try pNamedArg <|> pAtomIdx
+  tl <- many (try pNamedArg <|> pAtomIdx)
   return $ toApp h tl
 
 -- | One pipeline stage: atom_idx+ (piped value injected as last arg by eval)

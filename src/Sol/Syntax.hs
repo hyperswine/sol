@@ -19,6 +19,9 @@ data Expr
   | EAccess Expr [Key] -- index access chain: obj[key][idx]
   | EApp Expr [Expr] -- juxtaposition application: func arg1 arg2
   | EPipe Expr [[Expr]] -- pipeline: val |> [func,args] |> [func,args]
+  | EAtom String -- 'word  bare atom/symbol
+  | EFlag String Bool -- @flag (True) or !flag (False)
+  | ENamed String Expr -- key:val  named argument pair
   deriving (Show, Eq)
 
 -- | Top-level Sol statements (each ends with a '.')

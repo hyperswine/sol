@@ -22,7 +22,8 @@ import Data.Maybe (fromMaybe)
 import Data.Ord (comparing)
 import Sol.Syntax
 import Sol.Value
-import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, getCurrentDirectory, getFileSize, listDirectory, removeDirectoryRecursive, removeFile)
+import Sol.Parser (parseProgram)
+import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, getCurrentDirectory, getFileSize, getHomeDirectory, listDirectory, removeDirectoryRecursive, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode (..), exitWith)
 import System.FilePath (takeDirectory, takeExtension, takeFileName, (</>))
@@ -68,6 +69,13 @@ evalExpr env (EApp func args) = do
   fval <- evalExpr env func
   avals <- mapM (evalExpr env) args
   apply env fval avals
+
+-- Sigil expressions
+evalExpr _ (EAtom s)      = return (SStr s)
+evalExpr _ (EFlag k b)    = return (SPair (SStr k, SBool b))
+evalExpr env (ENamed k e) = do
+  v <- evalExpr env e
+  return (SPair (SStr k, v))
 
 -- Pipeline: val |> [f, extraArgs] |> ...
 -- Each stage inserts the accumulated value as the LAST argument to f.
@@ -116,6 +124,29 @@ apply env (SGuarded clauses) args
 apply env (SBuiltin n arity impl) args
   | arity >= 0 && length args < arity = return (SPartial (SBuiltin n arity impl) args)
   | otherwise = impl env args
+-- Executable handle: resolve PATH, convert args to shell words, exec
+apply env (SCmd name) args = do
+  mpath <- findExecutable name
+  exe   <- case mpath of
+    Just p  -> return p
+    Nothing -> solError ("cmd: executable not found on PATH: " ++ name)
+  let words_ = concatMap toShellWords args
+  (ec, out, err) <- readProcessWithExitCode exe words_ ""
+  let code = case ec of ExitSuccess -> 0; ExitFailure n -> fromIntegral n
+  return $ SDict $ Map.fromList
+    [ ("exitcode", SNum code)
+    , ("stdout",   SStr out)
+    , ("stderr",   SStr err)
+    ]
+  where
+    toShellWords (SStr s)                         = [s]
+    toShellWords (SNum n)                         = [showVal (SNum n)]
+    toShellWords (SPair (SStr k, SBool True))      = ["--" ++ k]
+    toShellWords (SPair (SStr k, SBool False))     = ["--no-" ++ k]
+    toShellWords (SPair (SStr k, SStr v))          = ["--" ++ k, v]
+    toShellWords (SPair (SStr k, SNum v))          = ["--" ++ k, showVal (SNum v)]
+    toShellWords (SCmd s)                          = [s]
+    toShellWords v                                 = [showVal v]
 apply _ fn args = solError ("cannot apply " ++ showVal fn ++ " to " ++ show (length args) ++ " arguments")
 
 -- ============================================================
@@ -241,7 +272,8 @@ initialEnv =
   Map.fromList
     -- I/O
     [ builtin "echo" 1 bEcho,
-      builtin "print" 1 bEcho,
+      builtin "println" 1 bPrintln,
+      builtin "print" 1 bPrint,
       builtin "str" 1 (\_ [v] -> return (SStr (showVal v))),
       builtin "num" 1 bNum,
       builtin "bool" 1 (\_ [v] -> return (SBool (isTruthy v))),
@@ -348,7 +380,42 @@ initialEnv =
       builtin "progress" (-1) bProgress,
       -- Miscellaneous
       builtin "type" 1 (\_ [v] -> return (SStr (typeName v))),
-      builtin "place" 2 bPlace
+      builtin "place" 2 bPlace,
+      -- Executable handle
+      builtin "cmd" 1 (\_ [SStr name] -> return (SCmd name)),
+      -- Module system
+      builtin "use" 1 bUse,
+      builtin "run" 1 bRun,
+      -- Result / Option constructors
+      builtin "Just"    1 (\_ [v] -> return (mkTagged "Just"    (Just v))),
+      builtin "Nothing" 0 (\_ []  -> return (mkTagged "Nothing" Nothing)),
+      builtin "Ok"      1 (\_ [v] -> return (mkTagged "Ok"      (Just v))),
+      builtin "Err"     1 (\_ [v] -> return (mkTagged "Err"     (Just v))),
+      -- Result / Option predicates
+      builtin "isJust"    1 (\_ [v] -> return (SBool (hasTag "Just"    v))),
+      builtin "isNothing" 1 (\_ [v] -> return (SBool (hasTag "Nothing" v))),
+      builtin "isOk"      1 (\_ [v] -> return (SBool (hasTag "Ok"      v))),
+      builtin "isErr"     1 (\_ [v] -> return (SBool (hasTag "Err"     v))),
+      -- Result / Option extractors
+      builtin "fromJust"  1 (\_ [v] -> extractVal "fromJust"  v),
+      builtin "fromOk"    1 (\_ [v] -> extractVal "fromOk"    v),
+      builtin "fromErr"   1 (\_ [v] -> extractVal "fromErr"   v),
+      builtin "fromMaybe" 2 (\_ [def, v] -> return (fromMaybeVal def v)),
+      builtin "unwrapOr"  2 (\_ [def, v] -> return (fromMaybeVal def v)),
+      -- Result / Option combinators
+      builtin "andThen" 2 bAndThen,
+      builtin "mapErr"  2 bMapErr,
+      -- Arg list helpers
+      builtin "has_flag" 2 bHasFlag,
+      builtin "flag_val" 2 bFlagVal,
+      builtin "pos_args" 1 bPosArgs,
+      -- sol self-reference record
+      ("sol", SDict $ Map.fromList
+        [ ("run",     SBuiltin "sol.run"     1 bSolRun)
+        , ("check",   SBuiltin "sol.check"   1 bSolCheck)
+        , ("upload",  SBuiltin "sol.upload"  1 bSolUpload)
+        , ("install", SBuiltin "sol.install" 1 bSolInstall)
+        ])
     ]
   where
     -- exit has two forms: exit (code 0) and exit n
@@ -383,6 +450,9 @@ eqVal (SList a) (SList b) = length a == length b && and (zipWith eqVal a b)
 eqVal (SDict a) (SDict b) =
   Map.keys a == Map.keys b
     && all (\k -> maybe False id (eqVal <$> Map.lookup k a <*> Map.lookup k b)) (Map.keys a)
+eqVal (SCmd a) (SCmd b) = a == b
+eqVal (SPair (k1, v1)) (SPair (k2, v2)) = eqVal k1 k2 && eqVal v1 v2
+eqVal (SModule p1 _) (SModule p2 _) = p1 == p2
 eqVal _ _ = False
 
 instance Eq SolVal where
@@ -392,9 +462,27 @@ instance Eq SolVal where
 -- Built-in implementations
 -- ============================================================
 
+-- echo: human-friendly output; unwraps Just/Ok
 bEcho :: Env -> [SolVal] -> IO SolVal
-bEcho _ [v] = putStrLn (showVal v) >> return SNull
-bEcho _ vs = mapM_ (putStrLn . showVal) vs >> return SNull
+bEcho _ [v] = putStrLn (echoVal v) >> return SNull
+bEcho _ vs  = mapM_ (putStrLn . echoVal) vs >> return SNull
+
+echoVal :: SolVal -> String
+echoVal (SDict m)
+  | Just (SStr tag) <- Map.lookup "tag" m
+  , tag `elem` ["Just", "Ok"]
+  = maybe "" showVal (Map.lookup "val" m)
+echoVal v = showVal v
+
+-- println: faithful structural output
+bPrintln :: Env -> [SolVal] -> IO SolVal
+bPrintln _ [v] = putStrLn (showVal v) >> return SNull
+bPrintln _ vs  = mapM_ (putStrLn . showVal) vs >> return SNull
+
+-- print: no trailing newline
+bPrint :: Env -> [SolVal] -> IO SolVal
+bPrint _ [v] = putStr (showVal v) >> return SNull
+bPrint _ vs  = mapM_ (putStr . showVal) vs >> return SNull
 
 bNum :: Env -> [SolVal] -> IO SolVal
 bNum _ [SNum n] = return (SNum n)
@@ -418,6 +506,15 @@ bExitCode _ _ = exitWith ExitSuccess >> return SNull
 -- Higher-order
 
 bMap :: Env -> [SolVal] -> IO SolVal
+bMap env [f, SDict m]
+  | Just (SStr tag) <- Map.lookup "tag" m
+  , tag `elem` ["Just", "Ok"] =
+      case Map.lookup "val" m of
+        Just v  -> do r <- apply env f [v]; return (mkTagged tag (Just r))
+        Nothing -> return (SDict m)
+bMap _ [_, SDict m]
+  | Just (SStr tag) <- Map.lookup "tag" m
+  , tag `elem` ["Nothing", "Err"] = return (SDict m)
 bMap env [f, SList xs] = SList <$> mapM (\x -> apply env f [x]) xs
 bMap env [f, SStr s]   = SList <$> mapM (\c -> apply env f [SStr [c]]) s
 bMap _ [_, v] = solError ("map: expected a list or string, got " ++ typeName v)
@@ -534,7 +631,8 @@ bGrep pat text = solError ("grep: expected strings, got " ++ typeName pat ++ " a
 
 -- String helpers
 trim :: String -> String
-trim = reverse . dropWhile (== ' ') . reverse . dropWhile (== ' ')
+trim = reverse . dropWhile isWS . reverse . dropWhile isWS
+  where isWS c = c `elem` " \t\n\r"
 
 splitOn :: String -> String -> [String]
 splitOn _ "" = [""]
@@ -977,6 +1075,207 @@ typeName (SFun _ _) = "function"
 typeName (SBuiltin _ _ _) = "function"
 typeName (SPartial _ _) = "function"
 typeName (SGuarded _) = "function"
+typeName (SCmd _) = "cmd"
+typeName (SPair _) = "pair"
+typeName (SModule _ _) = "module"
+
+-- ============================================================
+-- Result / Option helpers (Just, Nothing, Ok, Err)
+-- ============================================================
+
+mkTagged :: String -> Maybe SolVal -> SolVal
+mkTagged tag Nothing  = SDict (Map.fromList [("tag", SStr tag)])
+mkTagged tag (Just v) = SDict (Map.fromList [("tag", SStr tag), ("val", v)])
+
+hasTag :: String -> SolVal -> Bool
+hasTag t (SDict m) = Map.lookup "tag" m == Just (SStr t)
+hasTag _ _         = False
+
+extractVal :: String -> SolVal -> IO SolVal
+extractVal _ (SDict m) | Just v <- Map.lookup "val" m = return v
+extractVal name v = solError (name ++ ": no value in " ++ showVal v)
+
+fromMaybeVal :: SolVal -> SolVal -> SolVal
+fromMaybeVal def v
+  | hasTag "Nothing" v || hasTag "Err" v = def
+  | otherwise = case v of
+      SDict m -> fromMaybe def (Map.lookup "val" m)
+      _       -> v
+
+bAndThen :: Env -> [SolVal] -> IO SolVal
+bAndThen env [f, SDict m]
+  | Just (SStr tag) <- Map.lookup "tag" m
+  , tag `elem` ["Just", "Ok"] =
+      case Map.lookup "val" m of
+        Just v  -> apply env f [v]
+        Nothing -> return (SDict m)
+bAndThen _ [_, v] = return v  -- pass through Nothing/Err/other
+bAndThen _ _ = solError "andThen: expected function and value"
+
+bMapErr :: Env -> [SolVal] -> IO SolVal
+bMapErr env [f, SDict m]
+  | Just (SStr "Err") <- Map.lookup "tag" m =
+      case Map.lookup "val" m of
+        Just v  -> do r <- apply env f [v]; return (mkTagged "Err" (Just r))
+        Nothing -> return (SDict m)
+bMapErr _ [_, v] = return v  -- pass through Ok/Just/Nothing/other
+bMapErr _ _ = solError "mapErr: expected function and value"
+
+-- ============================================================
+-- Arg list helpers for command descriptors
+-- ============================================================
+
+bHasFlag :: Env -> [SolVal] -> IO SolVal
+bHasFlag _ [SStr k, SList args] =
+  return (SBool (any isPairWith args))
+  where
+    isPairWith (SPair (SStr k', SBool True)) = k == k'
+    isPairWith _ = False
+bHasFlag _ _ = solError "has_flag: expected key and args list"
+
+bFlagVal :: Env -> [SolVal] -> IO SolVal
+bFlagVal _ [SStr k, SList args] =
+  return (findPairVal k args)
+  where
+    findPairVal _ [] = SNull
+    findPairVal key (SPair (SStr k', v) : _) | key == k' = v
+    findPairVal key (_ : rest) = findPairVal key rest
+bFlagVal _ _ = solError "flag_val: expected key and args list"
+
+bPosArgs :: Env -> [SolVal] -> IO SolVal
+bPosArgs _ [SList args] = return (SList (filter (not . isPair) args))
+  where
+    isPair (SPair _) = True
+    isPair _ = False
+bPosArgs _ _ = solError "pos_args: expected args list"
+
+-- ============================================================
+-- use / run — module loading and scoped evaluation
+-- ============================================================
+
+parseModuleURI :: String -> (String, String)
+parseModuleURI uri =
+  let (name, rest) = break (== '#') uri
+  in (name, drop 1 rest)
+
+resolveModule :: String -> IO FilePath
+resolveModule uri = do
+  let (name, hash) = parseModuleURI uri
+  homeDir <- getHomeDirectory
+  let cachePath = homeDir </> ".sol" </> "lib" </> hash </> "script.sol"
+  cacheExists <- doesFileExist cachePath
+  if cacheExists
+    then return cachePath
+    else do
+      let registryPath = homeDir </> ".sol" </> "registry.json"
+      regExists <- doesFileExist registryPath
+      if not regExists
+        then solError ("use: module '" ++ name ++ "' not cached and no registry found at " ++ registryPath)
+        else do
+          content <- readFile registryPath
+          case parseJson content of
+            Left e -> solError ("use: failed to parse registry: " ++ e)
+            Right (SDict registry) ->
+              case Map.lookup name registry of
+                Nothing -> solError ("use: module '" ++ name ++ "' not found in registry")
+                Just (SStr url) -> do
+                  (ec, out, err) <- readProcessWithExitCode "curl" ["-sL", url] ""
+                  case ec of
+                    ExitFailure _ -> solError ("use: download failed for " ++ uri ++ ": " ++ err)
+                    ExitSuccess -> do
+                      createDirectoryIfMissing True (takeDirectory cachePath)
+                      writeFile cachePath out
+                      return cachePath
+                Just _ -> solError ("use: registry entry for '" ++ name ++ "' must be a URL string")
+            Right _ -> solError "use: registry must be a JSON object"
+
+bUse :: Env -> [SolVal] -> IO SolVal
+bUse _ [SStr uri] = do
+  path <- resolveModule uri
+  src  <- readFile path
+  case parseProgram src of
+    Left err    -> solError ("use: parse error in " ++ uri ++ ": " ++ show err)
+    Right stmts -> return (SModule path stmts)
+bUse _ [v] = solError ("use: expected URI string, got " ++ typeName v)
+bUse _ _   = solError "use: expected one argument"
+
+bRun :: Env -> [SolVal] -> IO SolVal
+bRun env [SModule _ stmts] = evalRun env stmts
+bRun _   [v] = solError ("run: expected a module, got " ++ typeName v)
+bRun _   _   = solError "run: expected one argument"
+
+evalRun :: Env -> [Stmt] -> IO SolVal
+evalRun env stmts = do
+  finalEnv <- evalProg env stmts
+  return (lastReturnValue stmts finalEnv)
+
+lastMay :: [a] -> Maybe a
+lastMay [] = Nothing
+lastMay xs = Just (last xs)
+
+lastReturnValue :: [Stmt] -> Env -> SolVal
+lastReturnValue stmts env = case lastMay stmts of
+  Just (SAssign n _ _ _) -> fromMaybe SNull (Map.lookup n env)
+  _                      -> SNull
+
+-- ============================================================
+-- sol self-reference record
+-- ============================================================
+
+checkDeps :: [Stmt] -> IO [String]
+checkDeps _ = return []  -- TODO: traverse AST for use calls and verify hashes
+
+bSolRun :: Env -> [SolVal] -> IO SolVal
+bSolRun env [SStr path] = do
+  src <- readFile path
+  case parseProgram src of
+    Left err    -> return (mkTagged "Err" (Just (SStr (show err))))
+    Right stmts -> do
+      result <- evalRun env stmts
+      return (mkTagged "Ok" (Just result))
+bSolRun _ [v] = solError ("sol.run: expected path string, got " ++ typeName v)
+bSolRun _ _   = solError "sol.run: expected one argument"
+
+bSolCheck :: Env -> [SolVal] -> IO SolVal
+bSolCheck _ [SStr path] = do
+  src <- readFile path
+  case parseProgram src of
+    Left err    -> return (mkTagged "Err" (Just (SStr (show err))))
+    Right stmts -> do
+      errs <- checkDeps stmts
+      case errs of
+        [] -> return (mkTagged "Ok"  (Just (SStr path)))
+        es -> return (mkTagged "Err" (Just (SList (map SStr es))))
+bSolCheck _ [v] = solError ("sol.check: expected path string, got " ++ typeName v)
+bSolCheck _ _   = solError "sol.check: expected one argument"
+
+bSolUpload :: Env -> [SolVal] -> IO SolVal
+bSolUpload _ [SStr path] = do
+  exists <- doesFileExist path
+  if not exists
+    then return (mkTagged "Err" (Just (SStr ("file not found: " ++ path))))
+    else do
+      content <- readFile path
+      let name = takeFileName path
+      (ec, out, _) <-
+        readProcessWithExitCode
+          "sh"
+          ["-c", "printf '%s' " ++ show (name ++ content) ++ " | shasum -a 256"]
+          ""
+      case ec of
+        ExitFailure _ -> return (mkTagged "Err" (Just (SStr "failed to compute hash")))
+        ExitSuccess -> do
+          let hash = takeWhile (/= ' ') (trim out)
+          homeDir <- getHomeDirectory
+          let cachePath = homeDir </> ".sol" </> "lib" </> hash </> "script.sol"
+          createDirectoryIfMissing True (takeDirectory cachePath)
+          writeFile cachePath content
+          return (mkTagged "Ok" (Just (SStr (name ++ "#" ++ hash))))
+bSolUpload _ [v] = solError ("sol.upload: expected path string, got " ++ typeName v)
+bSolUpload _ _   = solError "sol.upload: expected one argument"
+
+bSolInstall :: Env -> [SolVal] -> IO SolVal
+bSolInstall env args = bUse env args  -- install = use (fetches + caches)
 
 -- Needed for bSort (Key ordering)
 sortKey :: SolVal -> Either Double String

@@ -4,7 +4,7 @@ module Sol.Value (SolVal (..), Env, showVal, showRepr, isTruthy, emptyEnv) where
 import Data.List (intercalate)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Sol.Syntax (Expr)
+import Sol.Syntax (Expr, Stmt)
 
 -- | The variable environment maps names to runtime values
 type Env = Map String SolVal
@@ -28,6 +28,12 @@ data SolVal
   | -- | Guarded definition: list of (params, optional guard, body) clauses.
     --   Clauses are tried top-to-bottom; first whose guard is truthy wins.
     SGuarded [([String], Maybe Expr, Expr)]
+  | -- | Executable handle: resolved on PATH at call time
+    SCmd String
+  | -- | Named pair / flag tuple: ("key", value)
+    SPair (SolVal, SolVal)
+  | -- | Loaded-but-unevaluated script module
+    SModule FilePath [Stmt]
 
 emptyEnv :: Env
 emptyEnv = Map.empty
@@ -50,6 +56,9 @@ showVal (SFun ps _) = "<function(" ++ intercalate ", " ps ++ ")>"
 showVal (SBuiltin n _ _) = "<builtin:" ++ n ++ ">"
 showVal (SPartial f _) = "<partial " ++ showVal f ++ ">"
 showVal (SGuarded cs) = "<guarded(" ++ show (length cs) ++ " clauses)>"
+showVal (SCmd s) = "<cmd:" ++ s ++ ">"
+showVal (SPair (k, v)) = "(" ++ showRepr k ++ ", " ++ showRepr v ++ ")"
+showVal (SModule path _) = "<module:" ++ path ++ ">"
 
 -- | Show with quotes for strings (used inside containers)
 showRepr :: SolVal -> String

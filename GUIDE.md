@@ -2,6 +2,14 @@
 
 Sol is a minimal scripting language with a clean, readable syntax inspired by Python and Haskell. Every statement ends with a `.`.
 
+FAQ:
+
+- There are no if statements, pattern matching, loops, recursion.
+- There are static, strong types, but no type signatures, everything is inferred
+- There are Result (Ok, Err) and Maybe (Just, None) types that are used for many things. Use combinators like isJust, fromMaybe, andThen to chain against Result and Maybe values. `map` works for many things like List, String, Maybe, Result
+- Sol's functions are available in itself. Can call them like `sol.run <script>`
+- Sol has a single source of truth on the machine at `~/.sol/` which includes things like the registry.json and lib/ for installed and downloaded scripts
+
 ## Running Sol
 
 ```sh
@@ -233,22 +241,6 @@ echo (is_big 200).  # → true
 
 ---
 
-## If Expressions
-
-`if` is an expression — it can appear anywhere. Guards are often cleaner for multiple branches.
-
-```sol
-x = 7.
-label = if x > 10 then "big" else if x > 5 then "medium" else "small".
-echo label.   # → medium
-```
-
-```sol
-if x == 5 then echo "five" else echo "other".
-```
-
----
-
 ## Pipelines
 
 The `|>` operator passes the left-hand value as the **last** argument to the right-hand function:
@@ -272,18 +264,6 @@ big      = filter (> 4) doubled.    # [6, 8, 10]
 total    = fold + big.              # 24
 
 each echo nums.                     # prints each element
-```
-
----
-
-## Recursion
-
-```sol
-fib n = if n == 0 then 0 else if n == 1 then 1 else (fib (n - 1)) + (fib (n - 2)).
-echo (fib 10).    # → 55
-
-fact n = if n == 0 then 1 else n * (fact (n - 1)).
-echo (fact 5).    # → 120
 ```
 
 ---
@@ -368,7 +348,7 @@ jsonwrite updated "config.json".
 
 # Parse/stringify inline
 j = jsonparse "{\"x\": 1}".
-echo j|x.
+echo j["x"].
 echo (jsonstringify {"key": "value", "num": 42}).
 ```
 
