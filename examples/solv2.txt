@@ -1,0 +1,86 @@
+# Sol Feature Showcase: pipeline operator, f-string interpolation, guards, infix operators
+
+# F-String Interpolation
+name = "Sol".
+version = "2.0".
+echo "Welcome to {name} v{version}!".
+
+# Builtin Types : Number, "String", [List], {Map}. Thats it
+# Can use `-` in idents, as well as `.` for LHS bindings for subcommand patterns
+# Can use `'` suffix like x'
+
+# Pipeline Operator and named helpers
+double x = x * 2.
+gt5 x = x > 5.
+addup a b = a + b.
+sum = addup.
+
+numbers = [1, 2, 3, 4, 5].
+result = numbers |> List.map double |> List.filter gt5 |> List.fold sum 0.
+echo "Pipeline result: {result}".
+
+# Result Types with getenv
+home = Env.get "HOME" |> or_else "/tmp".
+echo "Home directory: {home}".
+
+# Shell command with Result types
+git = cmd "git". # adds cmd.git. calling git directly after this now does sh "git"
+git.status = cmd.git + "status".
+
+git_ran_successfully = git.status |> success.
+echo "Git command succeeded: {git_ran_successfully}".
+
+# Safe shell command with fallback
+which = cmd "which".
+which.python = cmd (which ++ "python3" |> or_else $ which ++ "python"). # ++ adds a space, if already a cmd, then just use + instead of ++. + adds space for cmds
+# when defining, cmd is almost like a cell that prevents it from being executed right away, only subsequent refs call
+# the . allows you to make a pseudo subcommand
+
+python_path = which.python |> or_raise "python not found".
+echo "Python location: {python_path}".
+
+Sys.get = cmd "whoami".
+
+# Complex pipeline with environment variable
+# Notice some commands like Env.get are just read-once commands, no resource at all to manage
+user = Sys.get. # whoami
+current_dir = Env.get "PWD" |> or_else ".".
+echo "Running as {user} in {current_dir}".
+
+# Data processing pipeline
+data = [100, 200, 300, 400, 500].
+doubled = data |> List.map double.
+gtFiveHundred x = x > 500.
+large_nums = doubled |> List.filter gtFiveHundred.
+total = large_nums |> List.fold addUp 0.
+echo "Sum of large doubled numbers: {total}".
+
+# Result error handling
+missing_var = Env.get "NONEXISTENT_VAR" |> or_else "default-value".
+echo "Missing var value: {missing_var}".
+
+# Dict access with new [] syntax. Can use labels like name = which is not  mean s "name" = although behave similarly. With name = you can use the `.` accessoor like user.name
+# Both serialize to "name" = ... so you actually lose information.
+user_info = {name = "Alice", age = 30}. # inferred Map {name : String, age : Number}, constraint added
+echo "User {user_info["name"]} is {user_info["age"]} years old".
+
+user = user_info.
+echo "[Alternative Syntax] = User {user.name} is {user.age} years old".
+
+# Guards replacing if/then/else, there are no pattern matching or if statements in Sol.
+score = 85. # score : Int inferred
+grade | score > 90 = "A".
+grade | score > 80 = "B".
+grade | score > 70 = "C".
+grade              = "D". # can do this or | otherwise = ...
+echo "Score {score} gets grade: {grade}".
+
+# think of Json.to as a smart String constructor
+write' "Users.json" ({users = [{name="jack", age=20}, {name="jill", age=21}]} |> Json.to).
+
+# myjson = with read' "Users.json" as f in f |> Json.from |> Map.get "users" |> List.map (Map.get "age") |> List.map (+ 1) |> ... have to reconstruct the map
+# better to use optics
+
+# Map.get (a, b, c...) (fn) is an optic
+myjson = with read' "Users.json" as f in f |> Json.from |> Map.map ("users", "ages") (+ 1) |> write "Users2.json".
+# with auto close() and binding auto extracts, if err exits 1, otherwise collect
