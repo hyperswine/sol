@@ -1,0 +1,22 @@
+To change:
+
+Add transactions
+All scripts now are transactions in terms of the builtin functions
+That uses OS locks flock()
+Then verifies all files
+Then commits all at once
+Then releases lock
+
+Enhance |> operator
+Now works as monadic, Result, a
+No need for andThen
+
+Agree on naming scheme for builtin functions, can use dual naming
+net.http vs wget
+net.fetch
+
+POWERSHELL like.
+
+So many aliases for the same function.
+
+wget - net.fetch - net.get

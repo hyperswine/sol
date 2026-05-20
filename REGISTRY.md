@@ -345,3 +345,9 @@ is never partially executed — `use` resolution for all dependencies completes
 (or fails) before `evalProg` is called on the top-level script. This means
 you either get full trust verification upfront or the script does not run at
 all.
+
+----
+
+DONE IN PHOENIX APP. SHOULD TEST WITH IT
+NEED TO CREATE PUB-PRIV AND STORE
+AND THEN USE

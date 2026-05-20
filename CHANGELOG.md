@@ -13,10 +13,12 @@ and this project adheres to the
 - **Infix operators** — arithmetic and comparison operators are now infix: `a + b`, `x * y`, `a == b` instead of `+ a b`, `* x y`, `== a b`.
 - **Index access** — dictionary and list access now uses bracket syntax: `dict["key"]`, `list[0]`, `dict[var]` instead of `dict|key`, `list|1`, `dict|(varname)`.
 - **Guarded definitions** — replaced `if/then/else` expressions with Haskell-style guarded clauses:
+
   ```
   classify x | x > 0 = "positive".
   classify x         = "non-positive".
   ```
+
   Works for both functions (with params) and plain values (0-param guards).
 - **Removed `if/then/else`** — the `if`, `then`, and `else` keywords no longer exist; all conditional logic uses guards.
 
