@@ -20,3 +20,5 @@ POWERSHELL like.
 So many aliases for the same function.
 
 wget - net.fetch - net.get
+
+Already have cmd for "" string based stuff.
