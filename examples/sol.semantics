@@ -1,0 +1,24 @@
+# pattern matching
+
+case e of V1 x1 x2 ... -> e1 | V2 y1 y2 ... -> e2 | ... _ -> ex
+------
+let r = e in if tag r == V1 then a1 = x1 r, a2 = x2 r ... e1 else if tag r == V2 then a1 = y1 r, a2 = y2 r ... else ex
+
+# smart pipeline
+
+Sol supports both currying and tuple functions or exps.
+The _ syntax for hole filling in pipelines (scala like) causes some issues because it wants tuple based functions
+Top level functions could have both curried and uncurried form
+
+f : a , g: (a -> b), f |> g _
+-------
+g f
+
+f : (File 1, Result a), g : File 1 -> a -> b, f |> g
+-------
+g f
+
+f : Result a, g : a -> b, f |> g
+-------
+g f
+
