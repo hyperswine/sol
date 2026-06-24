@@ -8,17 +8,70 @@ let r = e in if tag r == V1 then a1 = x1 r, a2 = x2 r ... e1 else if tag r == V2
 
 Sol supports both currying and tuple functions or exps.
 The _ syntax for hole filling in pipelines (scala like) causes some issues because it wants tuple based functions
-Top level functions could have both curried and uncurried form
+Top level functions are typically curried
+Slot filling only works for uncurried functions and expressions
+
+Slot filling
 
 f : a , g: (a -> b), f |> g _
 -------
 g f
 
+Smart Unwrap - Destructure Forwarding
+
 f : (File 1, Result a), g : File 1 -> a -> b, f |> g
 -------
 g f
+
+Smart Unwrap - Result Forwarding
 
 f : Result a, g : a -> b, f |> g
 -------
 g f
 
+Currying
+
+f : a, g : (a -> b), f |> g
+-------
+g f
+
+# modules
+
+Technically can be just done dynamically
+
+r = use "modulename#hash", modulename#hash <- {run = f}, f : a -> Result b
+------
+r <- {run = f}
+
+# linear types
+
+f : File 1, f' : File 1 -> b
+-----
+f' f
+
+Downassumption
+
+f : File 1, f' : File -> b
+-----
+f' : File 1 -> b, f' f
+
+Improper, dangling f existing
+
+f : File 1, ()
+------
+bottom   (/= f)
+
+# transactions
+
+Only side effects noted by Eff
+
+program : List Exp, Exp : a -> Eff b, eff subset Eff.Core, world
+-----------
+eval program -> Eff, world <- world [eff]
+
+Nothing happens to the World if eval program does not complete - either does not terminate or does gives an error
+Though termination is harder, some are meant to run in loops
+
+program : List Exp, Exp : a -> Eff b, eff subset Eff.Core, world
+-----------
+eval program -> Error, world <- world
