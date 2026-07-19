@@ -1,0 +1,51 @@
+cabal-version:      2.4
+name:               sol
+version:            0.1.0.0
+synopsis:           Sol — the portable VM edition of FPRISC (PoC)
+build-type:         Simple
+
+-- LLVM is only needed for the JIT tier (src/JIT.hs + cbits/shim.c). On this
+-- machine it's a keg-only Homebrew install, so llvm-config isn't on PATH;
+-- point cabal straight at the Homebrew LLVM prefix instead. Override these
+-- on another machine (e.g. Intel Homebrew uses /usr/local/opt/llvm, Linux
+-- uses `llvm-config --includedir/--libdir`) via cabal.project.local.
+executable sol
+    main-is:          Main.hs
+    hs-source-dirs:   src
+    other-modules:    Bytecode
+                    , JIT
+                    , Lang
+                    , Txn
+                    , VM
+                    , Mod
+                    , Val
+                    , Web
+                    , Struct
+
+    build-depends:    base >=4 && <5
+                    , containers
+                    , directory
+                    , megaparsec
+                    , mtl
+                    , array
+                    , process
+                    , filepath
+                    , bytestring
+                    , network
+                    , time
+
+    default-language: Haskell2010
+
+    -- the C shim for llvm-c/Target.h's static-inline init functions
+    c-sources:        cbits/shim.c
+    include-dirs:     /opt/homebrew/opt/llvm/include
+    cc-options:       -D__STDC_CONSTANT_MACROS
+                      -D__STDC_FORMAT_MACROS
+                      -D__STDC_LIMIT_MACROS
+
+    -- link against Homebrew's libLLVM.dylib (LLVM 22) and make sure the
+    -- dynamic linker can find it at runtime too (it's outside the default
+    -- macOS dyld search path since llvm is keg-only).
+    extra-lib-dirs:   /opt/homebrew/opt/llvm/lib
+    extra-libraries:  LLVM
+    ghc-options:      -optl-Wl,-rpath,/opt/homebrew/opt/llvm/lib
