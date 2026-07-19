@@ -1,6 +1,9 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Eta reduce" #-}
 
 -- JIT.hs — LLVM ORC (LLJIT) tier for the Sol VM, via hand-rolled FFI to
 -- the LLVM-C API (no llvm-hs available; one 10-line C shim for the
@@ -35,20 +38,20 @@
 
 module JIT where
 
+import qualified Bytecode as B
 import Control.Monad (foldM, forM, forM_, unless, when)
-import Data.Int (Int64)
 import Data.IORef
+import Data.Int (Int64)
 import Data.List (nub)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Foreign.C.String
-import System.Environment (lookupEnv)
 import Foreign.Marshal.Alloc (alloca)
 import Foreign.Marshal.Array (allocaArray, withArrayLen)
 import Foreign.Ptr
 import Foreign.Storable
 import Lang (Core (..), Name, Prog)
-import qualified Bytecode as B
+import System.Environment (lookupEnv)
 
 -- ---- raw LLVM-C bindings ----------------------------------------------------
 
@@ -56,48 +59,84 @@ type LRef = Ptr () -- contexts, modules, builders, types, values, blocks, ...
 
 foreign import ccall "sol_llvm_init" c_llvm_init :: IO Int
 
+-- FOR LLVM 18, could just e.g. comment out the context stuff and use the previous version
 foreign import ccall "LLVMContextCreate" c_ctxCreate :: IO LRef
+
 foreign import ccall "LLVMOrcCreateNewThreadSafeContextFromLLVMContext" c_tscFromCtx :: LRef -> IO LRef
+
 foreign import ccall "LLVMOrcCreateNewThreadSafeModule" c_tsmCreate :: LRef -> LRef -> IO LRef
+
 foreign import ccall "LLVMOrcCreateLLJIT" c_lljitCreate :: Ptr LRef -> LRef -> IO LRef
+
 foreign import ccall "LLVMOrcLLJITGetMainJITDylib" c_lljitDylib :: LRef -> IO LRef
+
 foreign import ccall "LLVMOrcLLJITAddLLVMIRModule" c_lljitAddModule :: LRef -> LRef -> LRef -> IO LRef
+
 foreign import ccall "LLVMOrcLLJITLookup" c_lljitLookup :: LRef -> Ptr Int64 -> CString -> IO LRef
+
 foreign import ccall "LLVMGetErrorMessage" c_errMsg :: LRef -> IO CString
 
 foreign import ccall "LLVMModuleCreateWithNameInContext" c_modCreate :: CString -> LRef -> IO LRef
+
 foreign import ccall "LLVMCreateBuilderInContext" c_builderCreate :: LRef -> IO LRef
+
 foreign import ccall "LLVMDisposeBuilder" c_builderDispose :: LRef -> IO ()
+
 foreign import ccall "LLVMInt64TypeInContext" c_i64 :: LRef -> IO LRef
+
 foreign import ccall "LLVMPointerTypeInContext" c_ptrTy :: LRef -> Int -> IO LRef
+
 foreign import ccall "LLVMFunctionType" c_fnTy :: LRef -> Ptr LRef -> Int -> Int -> IO LRef
+
 foreign import ccall "LLVMAddFunction" c_addFn :: LRef -> CString -> LRef -> IO LRef
+
 foreign import ccall "LLVMGetParam" c_param :: LRef -> Int -> IO LRef
+
 foreign import ccall "LLVMAppendBasicBlockInContext" c_appendBB :: LRef -> LRef -> CString -> IO LRef
+
 foreign import ccall "LLVMPositionBuilderAtEnd" c_positionAtEnd :: LRef -> LRef -> IO ()
+
 foreign import ccall "LLVMGetInsertBlock" c_insertBlock :: LRef -> IO LRef
+
 foreign import ccall "LLVMGetBasicBlockParent" c_bbParent :: LRef -> IO LRef
+
 foreign import ccall "LLVMConstInt" c_constInt :: LRef -> Int64 -> Int -> IO LRef
+
 foreign import ccall "LLVMBuildAdd" c_bAdd :: LRef -> LRef -> LRef -> CString -> IO LRef
+
 foreign import ccall "LLVMBuildSub" c_bSub :: LRef -> LRef -> LRef -> CString -> IO LRef
+
 foreign import ccall "LLVMBuildMul" c_bMul :: LRef -> LRef -> LRef -> CString -> IO LRef
+
 foreign import ccall "LLVMBuildSDiv" c_bSDiv :: LRef -> LRef -> LRef -> CString -> IO LRef
+
 foreign import ccall "LLVMBuildICmp" c_bICmp :: LRef -> Int -> LRef -> LRef -> CString -> IO LRef
+
 foreign import ccall "LLVMBuildZExt" c_bZExt :: LRef -> LRef -> LRef -> CString -> IO LRef
+
 foreign import ccall "LLVMBuildBr" c_bBr :: LRef -> LRef -> IO LRef
+
 foreign import ccall "LLVMBuildCondBr" c_bCondBr :: LRef -> LRef -> LRef -> LRef -> IO LRef
+
 foreign import ccall "LLVMBuildRet" c_bRet :: LRef -> LRef -> IO LRef
+
 foreign import ccall "LLVMBuildAlloca" c_bAlloca :: LRef -> LRef -> CString -> IO LRef
+
 foreign import ccall "LLVMBuildLoad2" c_bLoad :: LRef -> LRef -> LRef -> CString -> IO LRef
+
 foreign import ccall "LLVMBuildStore" c_bStore :: LRef -> LRef -> LRef -> IO LRef
+
 foreign import ccall "LLVMBuildGEP2" c_bGEP :: LRef -> LRef -> LRef -> Ptr LRef -> Int -> CString -> IO LRef
+
 foreign import ccall "LLVMBuildCall2" c_bCall :: LRef -> LRef -> LRef -> Ptr LRef -> Int -> CString -> IO LRef
 
 -- native drivers: map/filter shape and fold shape
 type Drv4 = Ptr Int64 -> Ptr Int64 -> Int64 -> Ptr Int64 -> IO Int64
+
 type DrvF = Ptr Int64 -> Ptr Int64 -> Int64 -> Int64 -> IO Int64
 
 foreign import ccall "dynamic" mkDrv4 :: FunPtr Drv4 -> Drv4
+
 foreign import ccall "dynamic" mkDrvF :: FunPtr DrvF -> DrvF
 
 -- vec drivers with captured-scalar extras (partial application tier):
@@ -113,7 +152,12 @@ foreign import ccall "dynamic" mkDrvF5 :: FunPtr DrvF5 -> DrvF5
 
 -- LLVMIntPredicate
 pEQ, pNE, pSGT, pSGE, pSLT, pSLE :: Int
-pEQ = 32; pNE = 33; pSGT = 38; pSGE = 39; pSLT = 40; pSLE = 41
+pEQ = 32
+pNE = 33
+pSGT = 38
+pSGE = 39
+pSLT = 40
+pSLE = 41
 
 data JitCtx = JitCtx
   { jcJit :: LRef,
@@ -210,21 +254,15 @@ jitOK fnAr = ok
         let (h, args) = B.spine e
          in case h of
               CVar g
-                | g `notElem` locals,
-                  M.member g B.arithOps,
-                  length args == 2 ->
-                    all (ok locals) args
-                | g `notElem` locals,
-                  Just ar <- M.lookup g fnAr,
-                  ar == length args ->
-                    all (ok locals) args
+                | g `notElem` locals, M.member g B.arithOps, length args == 2 -> all (ok locals) args
+                | g `notElem` locals, Just ar <- M.lookup g fnAr, ar == length args -> all (ok locals) args
               _ -> False
       _ -> False -- strings, data construction, lambdas, errors: interpreter's job
 
 checkAll :: M.Map Name ([Name], Core) -> Maybe (M.Map Name ([Name], Core))
 checkAll cl =
   let ars = M.map (length . fst) cl
-   in if all (\(ps, b) -> jitOK ars ps b) (M.elems cl) then Just cl else Nothing
+   in if all (uncurry (jitOK ars)) (M.elems cl) then Just cl else Nothing
 
 -- ---- codegen ---------------------------------------------------------------
 
@@ -331,7 +369,7 @@ cgExpr cg fuel = go
       other -> error ("jit cgExpr: non-jittable node survived the guard: " ++ show other)
 
     callFn f fty vs = do
-      allArgs <- pure (fuel : vs)
+      let allArgs = fuel : vs
       withArrayLen allArgs $ \len p -> nm "call" $ c_bCall b fty f p len
 
     arith op x y = case op of
@@ -362,9 +400,7 @@ compileScheme jc prog scheme root = do
       Just closure -> do
         k <- atomicModifyIORef' (jcCount jc) (\c -> (c + 1, c))
         let sym = "sol_" ++ scheme ++ "_" ++ mangle root ++ "_" ++ show k
-        -- LLVM 22+: each compiled module gets its own plain LLVMContext;
-        -- wrap it into a ThreadSafeContext right before handing the module
-        -- to the JIT. (LLVMOrcThreadSafeContextGetContext was removed.)
+        -- LLVM 22+: each compiled module gets its own plain LLVMContext; wrap it into a ThreadSafeContext right before handing the module to the JIT. (LLVMOrcThreadSafeContextGetContext was removed.)
         ctx <- c_ctxCreate
         md <- nm sym $ \s -> c_modCreate s ctx
         b <- c_builderCreate ctx
@@ -372,9 +408,7 @@ compileScheme jc prog scheme root = do
         ptrTy <- c_ptrTy ctx 0
         let cg0 = CG b ctx i64 M.empty
         -- declare all closure fns first (mutual recursion), then define
-        decls <-
-          M.fromList
-            <$> forM (M.toList closure) (\(n, (ps, _)) -> (,) n <$> declareFn cg0 md ptrTy (sym ++ "_") n (length ps))
+        decls <- M.fromList <$> forM (M.toList closure) (\(n, (ps, _)) -> (,) n <$> declareFn cg0 md ptrTy (sym ++ "_") n (length ps))
         let cg = cg0 {cgFns = decls}
         forM_ (M.toList closure) $ \(n, def) -> defineFn cg def (fst (decls M.! n))
         let Just (ps, _) = M.lookup root closure
@@ -521,16 +555,8 @@ jitOKVec fnAr scalar intCols elemP0 locals0 = ok (S.singleton elemP0) locals0
         let (h, args) = B.spine e
          in case h of
               CVar g
-                | not (S.member g es),
-                  g `notElem` locals,
-                  M.member g B.arithOps,
-                  length args == 2 ->
-                    all (ok es locals) args
-                | not (S.member g es),
-                  g `notElem` locals,
-                  Just ar <- M.lookup g fnAr,
-                  ar == length args ->
-                    all (ok es locals) args
+                | not (S.member g es), g `notElem` locals, M.member g B.arithOps, length args == 2 -> all (ok es locals) args
+                | not (S.member g es), g `notElem` locals, Just ar <- M.lookup g fnAr, ar == length args -> all (ok es locals) args
               _ -> False
       _ -> False
 
@@ -660,7 +686,7 @@ compileVecScheme jc prog scheme root scalar intCols laySig nEx = do
               ("vecfold", [a, x]) -> (Just a, x)
               (_, [x]) -> (Nothing, x)
               _ -> (Nothing, "?")
-            helpersOK = all (\(ps, bd) -> jitOK ars ps bd) (M.elems helpers)
+            helpersOK = all (uncurry (jitOK ars)) (M.elems helpers)
             rootOK =
               length rootPs == needed
                 && jitOKVec ars scalar intCols elemP (exPs ++ maybe [] pure accP) rootBody
@@ -679,9 +705,7 @@ compileVecScheme jc prog scheme root scalar intCols laySig nEx = do
             ptrTy <- c_ptrTy ctx 0
             let cg0 = CG b ctx i64 M.empty
             -- helpers keep the normal (fuel, i64 args) shape
-            hdecls <-
-              M.fromList
-                <$> forM (M.toList helpers) (\(n, (ps, _)) -> (,) n <$> declareFn cg0 md ptrTy (sym ++ "_") n (length ps))
+            hdecls <- M.fromList <$> forM (M.toList helpers) (\(n, (ps, _)) -> (,) n <$> declareFn cg0 md ptrTy (sym ++ "_") n (length ps))
             -- the DUAL root: i64 f(fuel*, extras..., [acc,] cols**, idx)
             let dualArgTys = [ptrTy] ++ replicate nEx i64 ++ [i64 | scheme == "vecfold"] ++ [ptrTy, i64]
             dualTy <- withArrayLen dualArgTys $ \len p -> c_fnTy i64 p len 0
@@ -753,13 +777,14 @@ buildVecDriver cg md ptrTy scheme sym (ef, efTy) nEx = do
   z <- c_constInt i64 0 0
   o <- c_constInt i64 1 0
   -- captured scalars: loaded once, passed to every dual call
-  eVals <- mapM
-    ( \i -> do
-        ki <- c_constInt i64 (fromIntegral i) 0
-        pe <- withArrayLen [ki] $ \len p -> nm "pex" $ c_bGEP b i64 extras p len
-        nm "ex" $ c_bLoad b i64 pe
-    )
-    [0 .. nEx - 1]
+  eVals <-
+    mapM
+      ( \i -> do
+          ki <- c_constInt i64 (fromIntegral i) 0
+          pe <- withArrayLen [ki] $ \len p -> nm "pex" $ c_bGEP b i64 extras p len
+          nm "ex" $ c_bLoad b i64 pe
+      )
+      [0 .. nEx - 1]
   iA <- nm "i" $ c_bAlloca b i64
   accA <- nm "acc" $ c_bAlloca b i64
   _ <- c_bStore b z iA
@@ -822,5 +847,4 @@ runVecMapFilter addr pfuel extras cols n = do
 runVecFold :: Int64 -> Ptr Int64 -> [Int64] -> Ptr (Ptr Int64) -> Int -> Int64 -> IO Int64
 runVecFold addr pfuel extras cols n acc0 = do
   let f = mkDrvF5 (castPtrToFunPtr (intPtrToPtr (fromIntegral addr)))
-  withArrayLen (extras ++ [0]) $ \_ pex ->
-    f pfuel pex (castPtr cols) (fromIntegral n) acc0
+  withArrayLen (extras ++ [0]) $ \_ pex -> f pfuel pex (castPtr cols) (fromIntegral n) acc0
