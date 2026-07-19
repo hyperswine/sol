@@ -3,3 +3,4 @@ zip-project.sh
 *.elf
 *.bin
 *.kv
+sol*.zip
