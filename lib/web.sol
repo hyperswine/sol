@@ -1,6 +1,6 @@
-# web.sol — the view vocabulary for gen_view apps. These records are the
-# entire client protocol; the JS interprets them into DOM. Previously
-# copy-pasted into every app.
+# web.sol — LEGACY: the untyped record view vocabulary. Superseded by
+# lib/ui.sol (typed Html ADT + Style symbols); kept only so old pinned
+# imports keep resolving. New code should use ui.sol.
 
 node tag cls kids = {cls = cls, kids = kids, tag = tag}.
 text s = {text = s}.

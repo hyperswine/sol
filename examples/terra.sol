@@ -1,9 +1,8 @@
 # terra.sol — Terra II Lite: the card game's core loop as a Sol MVU app.
-# sol:notypes — view DSL builds heterogeneous node records ({text} vs
-# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 #
 # Encoded from the tabletop design: per-player Forward/Rear zones (3 lanes),
 # active supply from rear convoys, attack + counter-damage combat, rear
+ui = use "../lib/ui".
 # protection (rear is only exposed in a lane whose forward slot is empty),
 # tactics cards, and the shared ENV track (0-10) that rises each round and
 # with every kill, crossing deterministic phase thresholds:
@@ -312,20 +311,16 @@ update msg model =
   | False -> ({model | g = Persistent (step ev val (unwrapG model))}, None).
 
 # ---- view -----------------------------------------------------------------------
-node tag cls kids = {cls = cls, kids = kids, tag = tag}.
-text s = {text = s}.
-dynS name n = {dyn = name, node = n}.
-clickable ev val n = {ev = ev, node = n, val = val}.
 
-envBar env = node "div" "flex flex-row gap-1" (envCells 1 env).
+envBar env = ui.el "div" [ui.Style.flex, ui.Style.flexrow, ui.Style.gap1] (envCells 1 env).
 envCells k env | k > 10 = [].
-envCells k env = node "span" (case k <= env of True -> "badge" | False -> "tab") [text (str k)] :: envCells (k + 1) env.
+envCells k env = ui.el "span" (case k <= env of True -> [ui.Style.badge] | False -> [ui.Style.tab]) [ui.text (str k)] :: envCells (k + 1) env.
 
 slotView mine k s = case s of
-  Empty -> node "div" "card text-muted text-sm" [text "lane {k}: --"]
-| Occ c -> node "div" "card text-sm" [
-    node "div" "font-bold" [text "{c.nm}{shTag c}"],
-    node "div" "text-muted" [text (statLine c)]
+  Empty -> ui.el "div" [ui.Style.card, ui.Style.textmuted, ui.Style.textsm] [ui.text "lane {k}: --"]
+| Occ c -> ui.el "div" [ui.Style.card, ui.Style.textsm] [
+    ui.el "div" [ui.Style.fontbold] [ui.text "{c.nm}{shTag c}"],
+    ui.el "div" [ui.Style.textmuted] [ui.text (statLine c)]
   ].
 
 shTag c = case c.sh == 1 of True -> " [S]" | False -> "".
@@ -335,18 +330,18 @@ statLine c = case c.kind == :convoy of
   True -> "convoy - gen {c.atk} - hp {c.hp}/{c.mx}"
 | False -> "atk {c.atk} - hp {c.hp}/{c.mx}{usedTag c}".
 
-laneBtns g = node "div" "grid grid-cols-2 gap-2" (laneBtn 1 g).
+laneBtns g = ui.el "div" [ui.Style.grid, ui.Style.gridcols2, ui.Style.gap2] (laneBtn 1 g).
 laneBtn k g | k > 3 = [].
-laneBtn k g = clickable "attack" (str k) (node "span" "btn" [text "attack lane {k}"]) :: laneBtn (k + 1) g.
+laneBtn k g = ui.onClick "attack" (str k) (ui.el "span" [ui.Style.btn] [ui.text "attack lane {k}"]) :: laneBtn (k + 1) g.
 
-zoneRow mine tag2 slots = node "div" "grid grid-cols-2 gap-2" (zoneCells mine 1 slots).
+zoneRow mine tag2 slots = ui.el "div" [ui.Style.grid, ui.Style.gridcols2, ui.Style.gap2] (zoneCells mine 1 slots).
 zoneCells mine k slots | slots == [] = [].
 zoneCells mine k slots = case slots of s :: r -> slotView mine k s :: zoneCells mine (k + 1) r.
 
-handCard i c = clickable "play" (str i)
-  (node "div" "card text-sm" [
-    node "div" "font-bold" [text "{c.nm} ({c.cost})"],
-    node "div" "text-muted" [text (handLine c)]
+handCard i c = ui.onClick "play" (str i)
+  (ui.el "div" [ui.Style.card, ui.Style.textsm] [
+    ui.el "div" [ui.Style.fontbold] [ui.text "{c.nm} ({c.cost})"],
+    ui.el "div" [ui.Style.textmuted] [ui.text (handLine c)]
   ]).
 handLine c = case c.kind == :tactic of True -> "tactic" | False -> statLine c.
 
@@ -354,54 +349,54 @@ handRow i cs | cs == [] = [].
 handRow i cs = case cs of c :: r -> handCard i c :: handRow (i + 1) r.
 
 playerPanel g p isActive =
-  node "div" (case isActive of True -> "card flex flex-col gap-2" | False -> "card flex flex-col gap-2 text-muted") [
-    node "div" "flex flex-row items-center gap-3" [
-      node "span" "font-bold" [text p.nm],
-      node "span" "badge" [text "HQ {p.hq}"],
-      node "span" "badge" [text "supply {p.supply}"],
-      node "span" "text-sm text-muted" [text "deck {listLen p.deck}"]
+  ui.el "div" (case isActive of True -> [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap2] | False -> [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap2, ui.Style.textmuted]) [
+    ui.el "div" [ui.Style.flex, ui.Style.flexrow, ui.Style.itemscenter, ui.Style.gap3] [
+      ui.el "span" [ui.Style.fontbold] [ui.text p.nm],
+      ui.el "span" [ui.Style.badge] [ui.text "HQ {p.hq}"],
+      ui.el "span" [ui.Style.badge] [ui.text "supply {p.supply}"],
+      ui.el "span" [ui.Style.textsm, ui.Style.textmuted] [ui.text "deck {listLen p.deck}"]
     ],
-    node "div" "text-sm font-bold" [text "rear"],
+    ui.el "div" [ui.Style.textsm, ui.Style.fontbold] [ui.text "rear"],
     zoneRow isActive "rear" p.rear,
-    node "div" "text-sm font-bold" [text "forward"],
+    ui.el "div" [ui.Style.textsm, ui.Style.fontbold] [ui.text "forward"],
     zoneRow isActive "fwd" p.fwd
   ].
 
 turnLabel g p = case g.over == "" of True -> "{p.nm} to act" | False -> "{g.over} WINS".
 
-logRow s = node "div" "comment text-sm" [text s].
+logRow s = ui.el "div" [ui.Style.comment, ui.Style.textsm] [ui.text s].
 
 board model =
   g = unwrapG model;
   p = me g;
-  node "div" "flex flex-col gap-3" [
-    node "div" "flex flex-row items-center gap-3" [
-      node "span" "badge" [text "round {g.round}"],
-      node "span" "badge" [text "ENV {g.env}: {phaseName g.env}"],
-      node "span" "font-bold" [text (turnLabel g p)],
-      clickable "new" "" (node "span" "tab" [text "new game"])
+  ui.el "div" [ui.Style.flex, ui.Style.flexcol, ui.Style.gap3] [
+    ui.el "div" [ui.Style.flex, ui.Style.flexrow, ui.Style.itemscenter, ui.Style.gap3] [
+      ui.el "span" [ui.Style.badge] [ui.text "round {g.round}"],
+      ui.el "span" [ui.Style.badge] [ui.text "ENV {g.env}: {phaseName g.env}"],
+      ui.el "span" [ui.Style.fontbold] [ui.text (turnLabel g p)],
+      ui.onClick "new" "" (ui.el "span" [ui.Style.tab] [ui.text "new game"])
     ],
     envBar g.env,
     playerPanel g g.p2 (g.active == 2),
     playerPanel g g.p1 (g.active == 1),
-    node "div" "card flex flex-col gap-2" [
-      node "div" "font-bold" [text "{p.nm} hand (click to play)"],
-      node "div" "grid grid-cols-2 gap-2" (handRow 1 p.hand),
-      node "div" "flex flex-row gap-2 flex-wrap" [
+    ui.el "div" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap2] [
+      ui.el "div" [ui.Style.fontbold] [ui.text "{p.nm} hand (click to play)"],
+      ui.el "div" [ui.Style.grid, ui.Style.gridcols2, ui.Style.gap2] (handRow 1 p.hand),
+      ui.el "div" [ui.Style.flex, ui.Style.flexrow, ui.Style.gap2, ui.Style.flexwrap] [
         laneBtns g,
-        clickable "end" "" (node "span" "btn" [text "end turn"])
+        ui.onClick "end" "" (ui.el "span" [ui.Style.btn] [ui.text "end turn"])
       ]
     ],
-    node "div" "flex flex-col gap-1" (List.map logRow g.log)
+    ui.el "div" [ui.Style.flex, ui.Style.flexcol, ui.Style.gap1] (List.map logRow g.log)
   ].
 
 view model =
-  node "div" "container mx-auto flex flex-col gap-4 p-4" [
-    node "header" "flex flex-row items-center gap-3" [
-      node "h1" "text-2xl font-bold" [text "Terra II Lite"],
-      node "span" "badge" [text "hot-seat"]
+  ui.el "div" [ui.Style.container, ui.Style.mxauto, ui.Style.flex, ui.Style.flexcol, ui.Style.gap4, ui.Style.p4] [
+    ui.el "header" [ui.Style.flex, ui.Style.flexrow, ui.Style.itemscenter, ui.Style.gap3] [
+      ui.el "h1" [ui.Style.text2xl, ui.Style.fontbold] [ui.text "Terra II Lite"],
+      ui.el "span" [ui.Style.badge] [ui.text "hot-seat"]
     ],
-    dynS "main" (board model)
+    ui.dyn "main" (board model)
   ].
 
 > View.serve 8084 init update view [].

@@ -1,0 +1,4 @@
+packages: .
+
+package sol
+  flags: +llvm22

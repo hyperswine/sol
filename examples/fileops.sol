@@ -49,3 +49,5 @@ endsWith suf s =
 > u = writePath "/tmp/proj/tmp1.bak" "junk";
   writePath "/tmp/proj/tmp2.bak" "junk".
 > pruneSuffix "/tmp/proj" ".bak".
+
+# summary: scaffold a project dir tree; count lines in a dir; prune files by suffix.

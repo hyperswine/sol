@@ -1,11 +1,12 @@
 # todo.sol — todos with sign-in. Accounts + todo lists live in the shared
-# sol:notypes — view DSL builds heterogeneous node records ({text} vs
-# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 # KV store (todo.solkv), so your list follows your login across browsers.
+# The view uses the TYPED DSL (lib/ui.sol): Html ADT + Style symbols —
+# this file typechecks, no # sol:notypes pragma needed.
 # The signed-in user is `Persistent` (event-sourced, survives restarts);
 # the in-model todo list is runtime state, refreshed from KV on connect.
 
 base = use "../lib/base".
+ui = use "../lib/ui".
 
 nl = Str.fromCode 10.
 pI s = case s == "" of True -> 0 | False -> Str.parse s.
@@ -43,7 +44,7 @@ parseTodos s =
   k = findNl s 1;
   case k of
     0 -> [parseItem s]
-  | _ -> parseItem (substr s 1 (k - 1)) :: parseTodos (substr s (k + 1) (Str.len s)).
+  | _ -> parseItem (base.substr s 1 (k - 1)) :: parseTodos (base.substr s (k + 1) (Str.len s)).
 
 serItem t = (d, x) = t; "{d} {x}".
 
@@ -81,52 +82,46 @@ update msg model =
   | ("clear", v) -> save (List.filter isOpen model.todos) model
   | _ -> (model, None).
 
-# ---- view -------------------------------------------------------------------
-node tag cls kids = {cls = cls, kids = kids, tag = tag}.
-text s = {text = s}.
-dynS name n = {dyn = name, node = n}.
-clickable ev val n = {ev = ev, node = n, val = val}.
-inputBox name ph btn = {btn = btn, inp = name, ph = ph}.
-formBox ev fields btn = {btn = btn, fields = fields, form = ev}.
+# ---- view (typed DSL: ui.Html + ui.Style symbols) ---------------------------
 
 loginView model =
-  node "div" "card flex flex-col gap-3" [
-    node "h2" "text-xl font-bold" [text "Sign in"],
-    formBox "login" ["username", "password"] "Sign in",
-    node "h3" "font-bold" [text "New here? Register"],
-    formBox "register" ["username", "password"] "Create account",
-    node "span" "text-muted" [text model.note]
+  ui.div [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap3] [
+    ui.h2 [ui.Style.textxl, ui.Style.fontbold] [ui.text "Sign in"],
+    ui.form "login" ["username", "password"] "Sign in",
+    ui.h3 [ui.Style.fontbold] [ui.text "New here? Register"],
+    ui.form "register" ["username", "password"] "Create account",
+    ui.span [ui.Style.textmuted] [ui.text model.note]
   ].
 
 todoItem k t =
   (d, x) = t;
-  clickable "toggle" (str k)
-    (node "div" (case d == 1 of True -> "comment text-muted" | False -> "comment") [
-      text (case d == 1 of True -> "[x] {x}" | False -> "[ ] {x}")
+  ui.onClick "toggle" (str k)
+    (ui.div (case d == 1 of True -> [ui.Style.comment, ui.Style.textmuted] | False -> [ui.Style.comment]) [
+      ui.text (case d == 1 of True -> "[x] {x}" | False -> "[ ] {x}")
     ]).
 
 todoRows k ts | ts == [] = [].
 todoRows k ts = case ts of x :: rest -> todoItem k x :: todoRows (k + 1) rest.
 
 todoView model =
-  node "div" "flex flex-col gap-3" [
-    node "div" "flex flex-row items-center gap-3" [
-      node "span" "badge" [text "{unwrapU model} - {openCount model.todos} open"],
-      clickable "clear" "" (node "span" "tab" [text "clear done"]),
-      clickable "logout" "" (node "span" "tab" [text "sign out"])
+  ui.div [ui.Style.flex, ui.Style.flexcol, ui.Style.gap3] [
+    ui.div [ui.Style.flex, ui.Style.flexrow, ui.Style.itemscenter, ui.Style.gap3] [
+      ui.span [ui.Style.badge] [ui.text "{unwrapU model} - {openCount model.todos} open"],
+      ui.onClick "clear" "" (ui.span [ui.Style.tab] [ui.text "clear done"]),
+      ui.onClick "logout" "" (ui.span [ui.Style.tab] [ui.text "sign out"])
     ],
-    node "div" "card flex flex-col gap-2" [
-      inputBox "add" "what needs doing?" "Add",
-      node "div" "flex flex-col gap-1" (todoRows 1 model.todos)
+    ui.div [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap2] [
+      ui.inputRow "add" "what needs doing?" "Add",
+      ui.div [ui.Style.flex, ui.Style.flexcol, ui.Style.gap1] (todoRows 1 model.todos)
     ]
   ].
 
 view model =
-  node "div" "container mx-auto flex flex-col gap-4 p-4" [
-    node "header" "flex flex-row items-center gap-3" [
-      node "h1" "text-2xl font-bold" [text "Sol Todos"]
+  ui.div [ui.Style.container, ui.Style.mxauto, ui.Style.flex, ui.Style.flexcol, ui.Style.gap4, ui.Style.p4] [
+    ui.el "header" [ui.Style.flex, ui.Style.flexrow, ui.Style.itemscenter, ui.Style.gap3] [
+      ui.h1 [ui.Style.text2xl, ui.Style.fontbold] [ui.text "Sol Todos"]
     ],
-    dynS "main" (case unwrapU model == "" of True -> loginView model | False -> todoView model)
+    ui.dyn "main" (case unwrapU model == "" of True -> loginView model | False -> todoView model)
   ].
 
 > View.serve 8081 init update view [].

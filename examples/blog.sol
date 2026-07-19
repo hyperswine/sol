@@ -1,9 +1,8 @@
 # blog.sol — an MVU web app. Sol owns init/update/view; the gen_view
-# sol:notypes — view DSL builds heterogeneous node records ({text} vs
-# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 # behavior (Web.hs) owns HTTP, WebSockets, sessions, and dyn-slot diffing.
 #
 #   ./sol examples/blog.sol      then open http://localhost:8080
+ui = use "../lib/ui".
 #
 # The server remembers your session: the tab you were on (and your
 # comments) come back when you revisit — the client stores a session token,
@@ -20,11 +19,6 @@ posts = [
    body = "A module is the hash of its AST, not its bytes. Reformatting does not change identity; code does. Pin the hash and the code that runs is exactly the code you reviewed - the registry is append-only because meanings never change out from under a name."}].
 
 # ---- view vocabulary (plain records; the client JS interprets them) ----
-node tag cls kids = {cls = cls, kids = kids, tag = tag}.
-text s = {text = s}.
-dynS name n = {dyn = name, node = n}.
-clickable ev val n = {ev = ev, node = n, val = val}.
-inputBox name ph btn = {btn = btn, inp = name, ph = ph}.
 
 # ---- MVU ----------------------------------------------------------------
 # model: tab + comments are `Persistent` (event-sourced to blog.soldata,
@@ -47,54 +41,54 @@ update msg model =
   | ("tick", v) -> ({model | ticks = model.ticks + 1}, None)
   | _ -> (model, None).
 
-tabCls cur i = case cur == i of True -> "tab tab-active" | False -> "tab".
+tabCls cur i = case cur == i of True -> [ui.Style.tab, ui.Style.tabactive] | False -> [ui.Style.tab].
 
 tabBtn cur i =
   p = posts ! i;
-  clickable "tab" (str i) (node "span" (tabCls cur i) [text p.title]).
+  ui.onClick "tab" (str i) (ui.el "span" (tabCls cur i) [ui.text p.title]).
 
 tabBar cur =
-  node "nav" "flex flex-row flex-wrap gap-2" (List.map (tabBtn cur) [1, 2, 3]).
+  ui.el "nav" [ui.Style.flex, ui.Style.flexrow, ui.Style.flexwrap, ui.Style.gap2] (List.map (tabBtn cur) [1, 2, 3]).
 
 postView tab =
   p = posts ! tab;
-  node "article" "card flex flex-col gap-2" [
-    node "h2" "text-xl font-bold" [text p.title],
-    node "p" "text-muted" [text p.body]
+  ui.el "article" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap2] [
+    ui.el "h2" [ui.Style.textxl, ui.Style.fontbold] [ui.text p.title],
+    ui.el "p" [ui.Style.textmuted] [ui.text p.body]
   ].
 
 isFor tab c = (i, t) = c; i == tab.
-commentItem c = (i, t) = c; node "div" "comment" [text t].
+commentItem c = (i, t) = c; ui.el "div" [ui.Style.comment] [ui.text t].
 
 commentsView tab comments =
   mine = List.filter (isFor tab) comments;
-  node "section" "card flex flex-col gap-3" [
-    node "h3" "font-bold" [text "Comments"],
-    node "div" "flex flex-col gap-1" (List.map commentItem mine),
-    inputBox "comment" "write a comment..." "Post"
+  ui.el "section" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap3] [
+    ui.el "h3" [ui.Style.fontbold] [ui.text "Comments"],
+    ui.el "div" [ui.Style.flex, ui.Style.flexcol, ui.Style.gap1] (List.map commentItem mine),
+    ui.inputRow "comment" "write a comment..." "Post"
   ].
 
 statusBar model =
-  node "div" "flex flex-row flex-wrap items-center gap-3 text-sm" [
-    node "span" "badge" [text "up {model.ticks}s"],
-    clickable "luck" "" (node "span" "tab" [text "lucky: {model.lucky}"]),
-    clickable "motd" "" (node "span" "tab" [text "motd"]),
-    node "span" "text-muted" [text model.motd]
+  ui.el "div" [ui.Style.flex, ui.Style.flexrow, ui.Style.flexwrap, ui.Style.itemscenter, ui.Style.gap3, ui.Style.textsm] [
+    ui.el "span" [ui.Style.badge] [ui.text "up {model.ticks}s"],
+    ui.onClick "luck" "" (ui.el "span" [ui.Style.tab] [ui.text "lucky: {model.lucky}"]),
+    ui.onClick "motd" "" (ui.el "span" [ui.Style.tab] [ui.text "motd"]),
+    ui.el "span" [ui.Style.textmuted] [ui.text model.motd]
   ].
 
 # the static skeleton renders once; only the dyn slots ever travel again
 view model =
   tab = unwrap model.tab;
   comments = unwrap model.comments;
-  node "div" "container mx-auto flex flex-col gap-4 p-4" [
-    node "header" "flex flex-row items-center gap-3" [
-      node "h1" "text-2xl font-bold" [text "The Sol Blog"],
-      node "span" "badge" [text "MVU over WebSocket"],
-      dynS "status" (statusBar model)
+  ui.el "div" [ui.Style.container, ui.Style.mxauto, ui.Style.flex, ui.Style.flexcol, ui.Style.gap4, ui.Style.p4] [
+    ui.el "header" [ui.Style.flex, ui.Style.flexrow, ui.Style.itemscenter, ui.Style.gap3] [
+      ui.el "h1" [ui.Style.text2xl, ui.Style.fontbold] [ui.text "The Sol Blog"],
+      ui.el "span" [ui.Style.badge] [ui.text "MVU over WebSocket"],
+      ui.dyn "status" (statusBar model)
     ],
-    dynS "tabs" (tabBar tab),
-    dynS "post" (postView tab),
-    dynS "comments" (commentsView tab comments)
+    ui.dyn "tabs" (tabBar tab),
+    ui.dyn "post" (postView tab),
+    ui.dyn "comments" (commentsView tab comments)
   ].
 
 > View.serve 8080 init update view [(1000, "tick")].

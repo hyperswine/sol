@@ -1,10 +1,9 @@
 # dash.sol — a live dashboard with sign-in. Metrics tick server-side and
-# sol:notypes — view DSL builds heterogeneous node records ({text} vs
-# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 # push to the browser (no client events). Total sign-ins persist in KV;
 # the live series is runtime state, abandoned on restart by design.
 
 base = use "../lib/base".
+ui = use "../lib/ui".
 
 pI s = case s == "" of True -> 0 | False -> Str.parse s.
 unwrapU model = case model.user of Persistent u -> u.
@@ -44,56 +43,51 @@ update msg model =
   | ("sample", v) -> ({model | reqs = Str.parse v, series = takeN 10 (Str.parse v :: model.series)}, None)
   | _ -> (model, None).
 
-node tag cls kids = {cls = cls, kids = kids, tag = tag}.
-text s = {text = s}.
-dynS name n = {dyn = name, node = n}.
-clickable ev val n = {ev = ev, node = n, val = val}.
-formBox ev fields btn = {btn = btn, fields = fields, form = ev}.
 
 bar n | n == 0 = "".
 bar n = "#{bar (n - 1)}".
 
-sampleRow v = node "div" "text-sm" [text "{bar (v / 8)} {v}"].
+sampleRow v = ui.el "div" [ui.Style.textsm] [ui.text "{bar (v / 8)} {v}"].
 
 loginView model =
-  node "div" "card flex flex-col gap-3" [
-    node "h2" "text-xl font-bold" [text "Ops sign in"],
-    formBox "login" ["username", "password"] "Sign in",
-    node "h3" "font-bold" [text "Register"],
-    formBox "register" ["username", "password"] "Create account",
-    node "span" "text-muted" [text model.note]
+  ui.el "div" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap3] [
+    ui.el "h2" [ui.Style.textxl, ui.Style.fontbold] [ui.text "Ops sign in"],
+    ui.form "login" ["username", "password"] "Sign in",
+    ui.el "h3" [ui.Style.fontbold] [ui.text "Register"],
+    ui.form "register" ["username", "password"] "Create account",
+    ui.el "span" [ui.Style.textmuted] [ui.text model.note]
   ].
 
 dashView model =
-  node "div" "flex flex-col gap-3" [
-    node "div" "flex flex-row items-center gap-3" [
-      node "span" "badge" [text (unwrapU model)],
-      clickable "logout" "" (node "span" "tab" [text "sign out"])
+  ui.el "div" [ui.Style.flex, ui.Style.flexcol, ui.Style.gap3] [
+    ui.el "div" [ui.Style.flex, ui.Style.flexrow, ui.Style.itemscenter, ui.Style.gap3] [
+      ui.el "span" [ui.Style.badge] [ui.text (unwrapU model)],
+      ui.onClick "logout" "" (ui.el "span" [ui.Style.tab] [ui.text "sign out"])
     ],
-    node "div" "grid grid-cols-2 gap-3" [
-      node "div" "card flex flex-col gap-1" [
-        node "h3" "font-bold" [text "requests/sec"],
-        node "div" "text-2xl font-bold" [text (str model.reqs)]
+    ui.el "div" [ui.Style.grid, ui.Style.gridcols2, ui.Style.gap3] [
+      ui.el "div" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap1] [
+        ui.el "h3" [ui.Style.fontbold] [ui.text "requests/sec"],
+        ui.el "div" [ui.Style.text2xl, ui.Style.fontbold] [ui.text (str model.reqs)]
       ],
-      node "div" "card flex flex-col gap-1" [
-        node "h3" "font-bold" [text "total sign-ins"],
-        node "div" "text-2xl font-bold" [text model.logins]
+      ui.el "div" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap1] [
+        ui.el "h3" [ui.Style.fontbold] [ui.text "total sign-ins"],
+        ui.el "div" [ui.Style.text2xl, ui.Style.fontbold] [ui.text model.logins]
       ],
-      node "div" "card flex flex-col gap-1" [
-        node "h3" "font-bold" [text "history"],
-        node "div" "flex flex-col gap-1" (List.map sampleRow model.series)
+      ui.el "div" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap1] [
+        ui.el "h3" [ui.Style.fontbold] [ui.text "history"],
+        ui.el "div" [ui.Style.flex, ui.Style.flexcol, ui.Style.gap1] (List.map sampleRow model.series)
       ],
-      node "div" "card flex flex-col gap-1" [
-        node "h3" "font-bold" [text "about"],
-        node "p" "text-muted text-sm" [text "live series is runtime state - it resets on restart; sign-ins persist in KV"]
+      ui.el "div" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap1] [
+        ui.el "h3" [ui.Style.fontbold] [ui.text "about"],
+        ui.el "p" [ui.Style.textmuted, ui.Style.textsm] [ui.text "live series is runtime state - it resets on restart; sign-ins persist in KV"]
       ]
     ]
   ].
 
 view model =
-  node "div" "container mx-auto flex flex-col gap-4 p-4" [
-    node "header" "flex flex-row items-center gap-3" [node "h1" "text-2xl font-bold" [text "Sol Ops"]],
-    dynS "main" (case unwrapU model == "" of True -> loginView model | False -> dashView model)
+  ui.el "div" [ui.Style.container, ui.Style.mxauto, ui.Style.flex, ui.Style.flexcol, ui.Style.gap4, ui.Style.p4] [
+    ui.el "header" [ui.Style.flex, ui.Style.flexrow, ui.Style.itemscenter, ui.Style.gap3] [ui.el "h1" [ui.Style.text2xl, ui.Style.fontbold] [ui.text "Sol Ops"]],
+    ui.dyn "main" (case unwrapU model == "" of True -> loginView model | False -> dashView model)
   ].
 
 > View.serve 8082 init update view [(500, "tick")].

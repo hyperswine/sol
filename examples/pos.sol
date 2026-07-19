@@ -1,12 +1,13 @@
 # pos.sol — point of sale with cashier sign-in. Catalog is static Sol data;
-# sol:notypes — view DSL builds heterogeneous node records ({text} vs
-# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 # the cart is runtime state; store-wide revenue accumulates in KV and is
 # shared across every cashier and every restart.
 
 base = use "../lib/base".
+ui = use "../lib/ui".
 
-pI s = case s == "" of True -> 0 | False -> Str.parse s.
+isEmptyString s = case s == "" of True -> True | False -> False.
+
+pI s = case isEmptyString s of True -> 0 | False -> Str.parse s.
 unwrapU model = case model.user of Persistent u -> u.
 
 doLogin v model = (u, p) = base.splitFirst v; ({model | pendu = u, pendp = p}, Get "user:{u}" "auth").
@@ -52,55 +53,50 @@ update msg model =
               Print "sale: {cartTotal model.cart} by {unwrapU model}"])
   | _ -> (model, None).
 
-node tag cls kids = {cls = cls, kids = kids, tag = tag}.
-text s = {text = s}.
-dynS name n = {dyn = name, node = n}.
-clickable ev val n = {ev = ev, node = n, val = val}.
-formBox ev fields btn = {btn = btn, fields = fields, form = ev}.
 
 loginView model =
-  node "div" "card flex flex-col gap-3" [
-    node "h2" "text-xl font-bold" [text "Cashier sign in"],
-    formBox "login" ["username", "password"] "Sign in",
-    node "h3" "font-bold" [text "Register"],
-    formBox "register" ["username", "password"] "Create account",
-    node "span" "text-muted" [text model.note]
+  ui.el "div" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap3] [
+    ui.el "h2" [ui.Style.textxl, ui.Style.fontbold] [ui.text "Cashier sign in"],
+    ui.form "login" ["username", "password"] "Sign in",
+    ui.el "h3" [ui.Style.fontbold] [ui.text "Register"],
+    ui.form "register" ["username", "password"] "Create account",
+    ui.el "span" [ui.Style.textmuted] [ui.text model.note]
   ].
 
 productBtn k t =
-  clickable "buy" (str k) (node "div" "card flex flex-col gap-1" [
-    node "div" "font-bold" [text (nameOf t)],
-    node "div" "text-muted" [text "${priceOf t}"]
+  ui.onClick "buy" (str k) (ui.el "div" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap1] [
+    ui.el "div" [ui.Style.fontbold] [ui.text (nameOf t)],
+    ui.el "div" [ui.Style.textmuted] [ui.text "${priceOf t}"]
   ]).
 
 productGrid k ts | ts == [] = [].
 productGrid k ts = case ts of t :: r -> productBtn k t :: productGrid (k + 1) r.
 
-cartRow t = node "div" "comment flex flex-row gap-2" [
-  node "span" "flex-1" [text (nameOf t)], node "span" "" [text "${priceOf t}"]].
+cartRow t = ui.el "div" [ui.Style.comment, ui.Style.flex, ui.Style.flexrow, ui.Style.gap2] [
+  ui.el "span" [ui.Style.flex1] [ui.text (nameOf t)], ui.el "span" [] [ui.text "${priceOf t}"]].
 
 posView model =
-  node "div" "flex flex-col gap-3" [
-    node "div" "flex flex-row items-center gap-3" [
-      node "span" "badge" [text "cashier: {unwrapU model}"],
-      node "span" "badge" [text "revenue: ${model.revenue}"],
-      clickable "logout" "" (node "span" "tab" [text "sign out"])
+  ui.el "div" [ui.Style.flex, ui.Style.flexcol, ui.Style.gap3] [
+    ui.el "div" [ui.Style.flex, ui.Style.flexrow, ui.Style.itemscenter, ui.Style.gap3] [
+      ui.el "span" [ui.Style.badge] [ui.text "cashier: {unwrapU model}"],
+      ui.el "span" [ui.Style.badge] [ui.text "revenue: ${model.revenue}"],
+      ui.onClick "logout" "" (ui.el "span" [ui.Style.tab] [ui.text "sign out"])
     ],
-    node "div" "grid grid-cols-2 gap-3" (productGrid 1 catalog),
-    node "div" "card flex flex-col gap-2" [
-      node "h3" "font-bold" [text "cart - total ${cartTotal model.cart}"],
-      node "div" "flex flex-col gap-1" (List.map cartRow model.cart),
-      node "div" "flex flex-row gap-2" [
-        clickable "checkout" "" (node "span" "btn" [text "checkout"]),
-        clickable "void" "" (node "span" "tab" [text "void"])
+    ui.el "div" [ui.Style.grid, ui.Style.gridcols2, ui.Style.gap3] (productGrid 1 catalog),
+    ui.el "div" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap2] [
+      ui.el "h3" [ui.Style.fontbold] [ui.text "cart - total ${cartTotal model.cart}"],
+      ui.el "div" [ui.Style.flex, ui.Style.flexcol, ui.Style.gap1] (List.map cartRow model.cart),
+      ui.el "div" [ui.Style.flex, ui.Style.flexrow, ui.Style.gap2] [
+        ui.onClick "checkout" "" (ui.el "span" [ui.Style.btn] [ui.text "checkout"]),
+        ui.onClick "void" "" (ui.el "span" [ui.Style.tab] [ui.text "void"])
       ]
     ]
   ].
 
 view model =
-  node "div" "container mx-auto flex flex-col gap-4 p-4" [
-    node "header" "flex flex-row items-center gap-3" [node "h1" "text-2xl font-bold" [text "Sol POS"]],
-    dynS "main" (case unwrapU model == "" of True -> loginView model | False -> posView model)
+  ui.el "div" [ui.Style.container, ui.Style.mxauto, ui.Style.flex, ui.Style.flexcol, ui.Style.gap4, ui.Style.p4] [
+    ui.el "header" [ui.Style.flex, ui.Style.flexrow, ui.Style.itemscenter, ui.Style.gap3] [ui.el "h1" [ui.Style.text2xl, ui.Style.fontbold] [ui.text "Sol POS"]],
+    ui.dyn "main" (case unwrapU model == "" of True -> loginView model | False -> posView model)
   ].
 
 > View.serve 8083 init update view [].

@@ -4,11 +4,25 @@ version:            0.1.0.0
 synopsis:           Sol — the portable VM edition of FPRISC (PoC)
 build-type:         Simple
 
--- LLVM is only needed for the JIT tier (src/JIT.hs + cbits/shim.c). On this
--- machine it's a keg-only Homebrew install, so llvm-config isn't on PATH;
--- point cabal straight at the Homebrew LLVM prefix instead. Override these
--- on another machine (e.g. Intel Homebrew uses /usr/local/opt/llvm, Linux
--- uses `llvm-config --includedir/--libdir`) via cabal.project.local.
+-- LLVM is only needed for the JIT tier (src/JIT.hs + cbits/shim.c).
+--
+-- Version selection: LLVM 18 is the DEFAULT; build with LLVM 22 via
+--     cabal build -f llvm22
+-- The flag sets -DLLVM22, which flips the CPP seam in src/JIT.hs
+-- (ThreadSafeContext creation changed in 22: ThreadSafeContextGetContext
+-- was removed in favor of CreateNewThreadSafeContextFromLLVMContext).
+--
+-- Paths: the llvm22 branch points at keg-only Homebrew (llvm-config not
+-- on PATH there); the default branch uses Linux apt llvm-18 paths.
+-- Override either on another machine (e.g. Intel Homebrew uses
+-- /usr/local/opt/llvm, or `llvm-config --includedir/--libdir`) via
+-- cabal.project.local.
+
+flag llvm22
+  description: Build the JIT against LLVM 22 (default: LLVM 18)
+  default:     False
+  manual:      True
+
 executable sol
     main-is:          Main.hs
     hs-source-dirs:   src
@@ -40,14 +54,20 @@ executable sol
 
     -- the C shim for llvm-c/Target.h's static-inline init functions
     c-sources:        cbits/shim.c
-    include-dirs:     /opt/homebrew/opt/llvm/include
     cc-options:       -D__STDC_CONSTANT_MACROS
                       -D__STDC_FORMAT_MACROS
                       -D__STDC_LIMIT_MACROS
 
-    -- link against Homebrew's libLLVM.dylib (LLVM 22) and make sure the
-    -- dynamic linker can find it at runtime too (it's outside the default
-    -- macOS dyld search path since llvm is keg-only).
-    extra-lib-dirs:   /opt/homebrew/opt/llvm/lib
-    extra-libraries:  LLVM
-    ghc-options:      -optl-Wl,-rpath,/opt/homebrew/opt/llvm/lib
+    if flag(llvm22)
+      -- Homebrew's libLLVM.dylib (LLVM 22, keg-only): include + lib +
+      -- rpath so the dynamic linker finds it at runtime too
+      cpp-options:      -DLLVM22
+      include-dirs:     /opt/homebrew/opt/llvm/include
+      extra-lib-dirs:   /opt/homebrew/opt/llvm/lib
+      extra-libraries:  LLVM
+      ghc-options:      -optl-Wl,-rpath,/opt/homebrew/opt/llvm/lib
+    else
+      -- LLVM 18 (default): Linux apt layout (llvm-18 / libLLVM-18.so)
+      include-dirs:     /usr/lib/llvm-18/include
+      extra-lib-dirs:   /usr/lib/llvm-18/lib
+      extra-libraries:  LLVM-18

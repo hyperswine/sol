@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
@@ -59,10 +60,34 @@ type LRef = Ptr () -- contexts, modules, builders, types, values, blocks, ...
 
 foreign import ccall "sol_llvm_init" c_llvm_init :: IO Int
 
--- FOR LLVM 18, could just e.g. comment out the context stuff and use the previous version
+-- LLVM version seam (select with the `llvm22` cabal flag; default is 18):
+--   18: a ThreadSafeContext owns its LLVMContext
+--       (Create + ThreadSafeContextGetContext)
+--   22: ThreadSafeContextGetContext was removed — create a plain
+--       LLVMContext per module and wrap it at JIT-handoff time
+--       (LLVMOrcCreateNewThreadSafeContextFromLLVMContext)
+-- newModuleCtx returns the LLVMContext plus a deferred action producing
+-- the ThreadSafeContext to hand the finished module to the JIT with.
+#ifdef LLVM22
 foreign import ccall "LLVMContextCreate" c_ctxCreate :: IO LRef
 
 foreign import ccall "LLVMOrcCreateNewThreadSafeContextFromLLVMContext" c_tscFromCtx :: LRef -> IO LRef
+
+newModuleCtx :: IO (LRef, IO LRef)
+newModuleCtx = do
+  ctx <- c_ctxCreate
+  pure (ctx, c_tscFromCtx ctx)
+#else
+foreign import ccall "LLVMOrcCreateNewThreadSafeContext" c_tscCreate :: IO LRef
+
+foreign import ccall "LLVMOrcThreadSafeContextGetContext" c_tscCtx :: LRef -> IO LRef
+
+newModuleCtx :: IO (LRef, IO LRef)
+newModuleCtx = do
+  tsc <- c_tscCreate
+  ctx <- c_tscCtx tsc
+  pure (ctx, pure tsc)
+#endif
 
 foreign import ccall "LLVMOrcCreateNewThreadSafeModule" c_tsmCreate :: LRef -> LRef -> IO LRef
 
@@ -394,8 +419,10 @@ compileScheme jc prog scheme root = do
       Just closure -> do
         k <- atomicModifyIORef' (jcCount jc) (\c -> (c + 1, c))
         let sym = "sol_" ++ scheme ++ "_" ++ mangle root ++ "_" ++ show k
-        -- LLVM 22+: each compiled module gets its own plain LLVMContext; wrap it into a ThreadSafeContext right before handing the module to the JIT. (LLVMOrcThreadSafeContextGetContext was removed.)
-        ctx <- c_ctxCreate
+        -- each compiled module gets its own context; the deferred action
+        -- wraps it into a ThreadSafeContext at JIT-handoff (see the CPP
+        -- seam at the foreign imports for the 18-vs-22 difference)
+        (ctx, mkTsc) <- newModuleCtx
         md <- nm sym $ \s -> c_modCreate s ctx
         b <- c_builderCreate ctx
         i64 <- c_i64 ctx
@@ -408,7 +435,7 @@ compileScheme jc prog scheme root = do
         let Just (ps, _) = M.lookup root closure
         buildDriver2 cg md ptrTy scheme sym (decls M.! root) (length ps)
         c_builderDispose b
-        tsc <- c_tscFromCtx ctx
+        tsc <- mkTsc
         tsm <- c_tsmCreate md tsc
         dylib <- c_lljitDylib (jcJit jc)
         e <- c_lljitAddModule (jcJit jc) dylib tsm
@@ -685,7 +712,7 @@ compileVecScheme jc prog scheme root scalar intCols laySig nEx = do
             k <- atomicModifyIORef' (jcCount jc) (\c -> (c + 1, c))
             let sym = "sol_" ++ scheme ++ "_" ++ mangle root ++ "_" ++ show k
             -- LLVM 22+: fresh context per module (see compileScheme)
-            ctx <- c_ctxCreate
+            (ctx, mkTsc) <- newModuleCtx
             md <- nm sym $ \s -> c_modCreate s ctx
             b <- c_builderCreate ctx
             i64 <- c_i64 ctx
@@ -721,7 +748,7 @@ compileVecScheme jc prog scheme root scalar intCols laySig nEx = do
             _ <- c_bRet b r
             buildVecDriver cg md ptrTy scheme sym (dual, dualTy) nEx
             c_builderDispose b
-            tsc <- c_tscFromCtx ctx
+            tsc <- mkTsc
             tsm <- c_tsmCreate md tsc
             dylib <- c_lljitDylib (jcJit jc)
             e <- c_lljitAddModule (jcJit jc) dylib tsm

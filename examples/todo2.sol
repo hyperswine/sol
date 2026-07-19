@@ -1,15 +1,13 @@
 # todo2.sol — the todo app rebuilt on `use`d libraries: base (helpers),
-# sol:notypes — view DSL builds heterogeneous node records ({text} vs
-# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 # web (view vocabulary), auth (sign-in pattern). Compare with todo.sol:
 # the app is now ONLY its own logic.
 
 base = use "../lib/base#4cb470f20dc4cca4".
-web = use "../lib/web#58daf7798782a78e".
-auth = use "../lib/auth#acd09476b55e38d0".
+ui = use "../lib/ui#937f83a2a6bbb0da".
+auth = use "../lib/auth#71e071e95202e053".
 
 # aliases for the hot paths (qualified access also works everywhere)
-node = web.node.  text = web.text.  dynS = web.dynS.
+
 
 # ---- todos: one per line as "<done> <text>" in KV --------------------------
 parseItem line = (d, x) = base.splitFirst line; (base.pI d, x).
@@ -54,31 +52,31 @@ update msg model =
 # ---- view --------------------------------------------------------------------
 todoItem k t =
   (d, x) = t;
-  web.clickable "toggle" (str k)
-    (node "div" (case d == 1 of True -> "comment text-muted" | False -> "comment") [
-      text (case d == 1 of True -> "[x] {x}" | False -> "[ ] {x}")
+  ui.onClick "toggle" (str k)
+    (ui.div (case d == 1 of True -> [ui.Style.comment, ui.Style.textmuted] | False -> [ui.Style.comment]) [
+      ui.text (case d == 1 of True -> "[x] {x}" | False -> "[ ] {x}")
     ]).
 
 todoRows k ts | ts == [] = [].
 todoRows k ts = case ts of x :: rest -> todoItem k x :: todoRows (k + 1) rest.
 
 todoView model =
-  web.col "" [
-    web.row "items-center" [
-      web.badge "{auth.unwrapU model} - {openCount model.todos} open",
-      web.tabBtn "clear" "" "clear done",
-      web.tabBtn "logout" "" "sign out"
+  ui.col [] [
+    ui.row [ui.Style.itemscenter] [
+      ui.badge "{auth.unwrapU model} - {openCount model.todos} open",
+      ui.tabBtn "clear" "" "clear done",
+      ui.tabBtn "logout" "" "sign out"
     ],
-    web.card [
-      web.inputBox "add" "what needs doing?" "Add",
-      web.col "gap-1" (todoRows 1 model.todos)
+    ui.card [
+      ui.inputRow "add" "what needs doing?" "Add",
+      ui.col [ui.Style.gap1] (todoRows 1 model.todos)
     ]
   ].
 
 view model =
-  node "div" "container mx-auto flex flex-col gap-4 p-4" [
-    node "header" "flex flex-row items-center gap-3" [web.title "Sol Todos"],
-    dynS "main" (case auth.unwrapU model == "" of
+  ui.div [ui.Style.container, ui.Style.mxauto, ui.Style.flex, ui.Style.flexcol, ui.Style.gap4, ui.Style.p4] [
+    ui.el "header" [ui.Style.flex, ui.Style.flexrow, ui.Style.itemscenter, ui.Style.gap3] [ui.title "Sol Todos"],
+    ui.dyn "main" (case auth.unwrapU model == "" of
       True -> auth.loginView "Sign in" model
     | False -> todoView model)
   ].

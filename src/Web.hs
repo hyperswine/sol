@@ -1,6 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
 
+-- IDEALLY THIS WOULD BE COMPLETELY a LIB IN PURE SOL
+
 -- Web.hs — gen_view v2: MVU with event-sourced persistence, Cmds, and subs.
 --
 --   > View.serve 8080 init update view subs.
@@ -157,7 +159,7 @@ utcSeed = do
 collectP :: Rt -> Value -> [String]
 collectP rt = go
   where
-    go v@(VData t 0 [inner]) | t == rtPersistT rt = jsonV (rtShapes rt) inner : go inner
+    go v@(VData t 0 [inner]) | t == rtPersistT rt = jsonVC (rtShapes rt) (conIndex (rtCons rt)) inner : go inner
     go (VData _ _ fs) = concatMap go fs
     go _ = []
 
@@ -172,7 +174,7 @@ processMsg rt depth tok (ev, val) = do
         r <- cbUpdate (rtCbs rt) (mkMsg ev val) model
         let (m', c) = splitUpd r
         v' <- cbView (rtCbs rt) m'
-        pure (m', c, collectDyn (rtShapes rt) v')
+        pure (m', c, collectDyn (rtShapes rt) (conIndex (rtCons rt)) v')
       -- event sourcing: log the msg iff it moved the persistent projection
       when (collectP rt model /= collectP rt model') $
         withMVar (rtLog rt) $ \h -> do
@@ -305,13 +307,13 @@ wsSession rt conn = do
         Just (m, _) -> pure m
         Nothing -> withMVar (rtSolLock rt) (\_ -> cbInit (rtCbs rt) (VStr tok))
       v <- withMVar (rtSolLock rt) (\_ -> cbView (rtCbs rt) model)
-      let dyns = collectDyn (rtShapes rt) v
+      let dyns = collectDyn (rtShapes rt) (conIndex (rtCons rt)) v
       atomicModifyIORef' (rtSessions rt) (\m -> (M.insert tok (model, dyns) m, ()))
       -- register a serialized sender for pushes (subs, cmd results)
       sendLock <- newMVar ()
       let sender payload = withMVar sendLock (\_ -> wsSendText conn payload)
       atomicModifyIORef' (rtConns rt) (\m -> (M.insert tok sender m, ()))
-      sender ("{\"token\":" ++ jstr tok ++ ",\"view\":" ++ jsonV (rtShapes rt) v ++ "}")
+      sender ("{\"token\":" ++ jstr tok ++ ",\"view\":" ++ jsonVC (rtShapes rt) (conIndex (rtCons rt)) v ++ "}")
       processMsg rt 6 tok ("connected", "")
       loop tok
       atomicModifyIORef' (rtConns rt) (\m -> (M.delete tok m, ()))
@@ -340,38 +342,70 @@ intercalateC = go
     go [x] = x
     go (x : xs) = x ++ "," ++ go xs
 
--- walk the view collecting {dyn, node} slots, outermost first
-collectDyn :: Shapes -> Value -> M.Map String String
-collectDyn shapes = go M.empty
+-- walk the view collecting dyn slots — both the untyped {dyn, node}
+-- record form and the typed DynN constructor (lib/ui.sol) — outermost first
+collectDyn :: Shapes -> M.Map (Int, Int) String -> Value -> M.Map String String
+collectDyn shapes conNames = go M.empty
   where
+    lastSeg n = case break (== '.') n of
+      (_, '.' : rest) -> lastSeg rest
+      _ -> n
     go acc (VData tid 0 fs)
       | Just names <- M.lookup tid shapes,
         names == ["dyn", "node"],
         [VStr name, node] <- fs =
-          go (M.insert name (jsonV shapes node) acc) node
+          go (M.insert name (jsonVC shapes conNames node) acc) node
+    go acc (VData t c fs)
+      | Just nm <- M.lookup (t, c) conNames,
+        lastSeg nm == "DynN",
+        [VStr name, node] <- fs =
+          go (M.insert name (jsonVC shapes conNames node) acc) node
       | otherwise = foldl' go acc fs
-    go acc (VData _ _ fs) = foldl' go acc fs
     go acc _ = acc
 
 -- ---- Value -> JSON (field names from the compiler's shape table) ------------
 
+conIndex :: Cons -> M.Map (Int, Int) String
+conIndex cons = M.fromList [((t, v), n) | (n, (t, v)) <- M.toList cons]
+
 jsonV :: Shapes -> Value -> String
-jsonV shapes = go
+jsonV shapes = jsonVC shapes M.empty
+
+-- with the constructor table: the typed view DSL's Html ADT (lib/ui.sol)
+-- serializes to the SAME wire JSON the untyped record nodes use, so the
+-- client JS is unchanged. Constructors are matched by their name's last
+-- segment (file-module splicing prefixes them: ui.El, ui.Txt, ...).
+jsonVC :: Shapes -> M.Map (Int, Int) String -> Value -> String
+jsonVC shapes conNames = go
   where
-    go (VInt n) = show n
-    go (VStr s) = jstr s
-    go (VData 1 0 []) = "false"
-    go (VData 1 1 []) = "true"
-    go (VData 0 0 []) = "null"
-    go v@(VData t _ _) | t == listT = "[" ++ intercalateC (map go (listItemsV v)) ++ "]"
-    go (VData 4 0 [a, b]) = "[" ++ go a ++ "," ++ go b ++ "]"
-    go (VData 5 0 [a, b, c]) = "[" ++ go a ++ "," ++ go b ++ "," ++ go c ++ "]"
-    go (VData t 0 [VStr a]) | t == atomT = jstr (":" ++ a)
-    go (VData tid 0 fs)
+    obj kvs = "{" ++ intercalateC [jstr k ++ ":" ++ v | (k, v) <- kvs] ++ "}"
+    lastSeg n = case break (== '.') n of
+      (_, '.' : rest) -> lastSeg rest
+      _ -> n
+    go v@(VData t c fs)
+      | Just nm <- M.lookup (t, c) conNames = case (lastSeg nm, fs) of
+          ("Txt", [x]) -> obj [("text", go x)]
+          ("El", [tg, cl, ks]) -> obj [("tag", go tg), ("cls", go cl), ("kids", go ks)]
+          ("EvN", [ev, val, nd]) -> obj [("ev", go ev), ("val", go val), ("node", go nd)]
+          ("DynN", [d, nd]) -> obj [("dyn", go d), ("node", go nd)]
+          ("FormN", [f, flds, b]) -> obj [("form", go f), ("fields", go flds), ("btn", go b)]
+          ("InpN", [i, ph, b]) -> obj [("inp", go i), ("ph", go ph), ("btn", go b)]
+          _ -> goPlain v
+    go v = goPlain v
+    goPlain (VInt n) = show n
+    goPlain (VStr s) = jstr s
+    goPlain (VData 1 0 []) = "false"
+    goPlain (VData 1 1 []) = "true"
+    goPlain (VData 0 0 []) = "null"
+    goPlain v@(VData t _ _) | t == listT = "[" ++ intercalateC (map go (listItemsV v)) ++ "]"
+    goPlain (VData 4 0 [a, b]) = "[" ++ go a ++ "," ++ go b ++ "]"
+    goPlain (VData 5 0 [a, b, c]) = "[" ++ go a ++ "," ++ go b ++ "," ++ go c ++ "]"
+    goPlain (VData t 0 [VStr a]) | t == atomT = jstr (":" ++ a)
+    goPlain (VData tid 0 fs)
       | Just names <- M.lookup tid shapes,
         length names == length fs =
           "{" ++ intercalateC [jstr n ++ ":" ++ go f | (n, f) <- zip names fs] ++ "}"
-    go other = jstr (render other)
+    goPlain other = jstr (render other)
 
 jstr :: String -> String
 jstr s = "\"" ++ concatMap esc s ++ "\""

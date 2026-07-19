@@ -1,6 +1,1 @@
-dist-newstyle/
-zip-project.sh
-*.elf
-*.bin
-*.kv
-sol*.zip
+.DS_Store

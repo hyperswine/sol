@@ -3,7 +3,7 @@
 # keep pendu/pendp/note fields (runtime) and a Persistent user field.
 
 base = use "base".
-web = use "web".
+ui = use "ui".
 
 unwrapU model = case model.user of Persistent u -> u.
 
@@ -28,12 +28,12 @@ doRegchk stored model =
   | False -> ({model | note = "user already exists"}, None).
 
 loginView heading model =
-  web.card [
+  ui.card [
     node2 heading,
-    web.formBox "login" ["username", "password"] "Sign in",
-    web.subtitle "New here? Register",
-    web.formBox "register" ["username", "password"] "Create account",
-    web.muted model.note
+    ui.form "login" ["username", "password"] "Sign in",
+    ui.subtitle "New here? Register",
+    ui.form "register" ["username", "password"] "Create account",
+    ui.muted model.note
   ].
 
-node2 heading = web.node "h2" "text-xl font-bold" [web.text heading].
+node2 heading = ui.h2 [ui.Style.textxl, ui.Style.fontbold] [ui.text heading].
