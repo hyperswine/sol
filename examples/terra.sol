@@ -1,4 +1,6 @@
 # terra.sol — Terra II Lite: the card game's core loop as a Sol MVU app.
+# sol:notypes — view DSL builds heterogeneous node records ({text} vs
+# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 #
 # Encoded from the tabletop design: per-player Forward/Rear zones (3 lanes),
 # active supply from rear convoys, attack + counter-damage combat, rear
@@ -22,7 +24,7 @@
 # ---- tiny logic helpers ------------------------------------------------------
 and2 a b = case a of True -> b | False -> False.
 max0 n = case n < 0 of True -> 0 | False -> n.
-pI s = case s == "" of True -> 0 | False -> parseInt s.
+pI s = case s == "" of True -> 0 | False -> Str.parse s.
 
 # ---- cards: one shape for everything ----------------------------------------
 # kind :unit (forward) | :convoy (rear, atk = supply generated) | :tactic
@@ -60,7 +62,7 @@ removeAt k xs | xs == [] = [].
 removeAt k xs = case xs of
   x :: r -> (case k == 1 of True -> r | False -> x :: removeAt (k - 1) r).
 
-occs slots = filter isOcc slots.
+occs slots = List.filter isOcc slots.
 isOcc s = case s of Occ c -> True | Empty -> False.
 
 firstEmpty k slots | slots == [] = 0.
@@ -79,7 +81,7 @@ genOne env s = case s of
   | False -> 0).
 
 addGen env a s = a + genOne env s.
-genOf env rear = foldl (addGen env) 0 rear.
+genOf env rear = List.fold (addGen env) 0 rear.
 
 resetUsed s = case s of Empty -> Empty | Occ c -> Occ {c | used = 0}.
 
@@ -94,7 +96,7 @@ drawN n p = case p.deck == [] of
 beginTurn env p =
   p2 = drawN 1 p;
   half = case env >= 9 of True -> 2 | False -> 1;
-  {p2 | supply = p2.supply + (1 + genOf env p2.rear) / half, fwd = map resetUsed p2.fwd}.
+  {p2 | supply = p2.supply + (1 + genOf env p2.rear) / half, fwd = List.map resetUsed p2.fwd}.
 
 # ---- the game record ---------------------------------------------------------
 game0 = {active = 1, env = 0, log = ["-- round 1: P1 to act --"], over = "", p1 = beginTurn 0 (startP "P1"), p2 = startP "P2", round = 1}.
@@ -129,17 +131,17 @@ hitAmb dmg s = case s of
   Empty -> Empty
 | Occ c -> Occ {c | hp = c.hp - max0 (dmg - c.sh)}.
 
-cullZone slots = map cullSlot slots.
+cullZone slots = List.map cullSlot slots.
 cullSlot s = case s of
   Empty -> Empty
 | Occ c -> (case c.hp <= 0 of True -> Empty | False -> Occ c).
 
-countOccs slots = foldl addOcc 0 slots.
+countOccs slots = List.fold addOcc 0 slots.
 addOcc a s = case isOcc s of True -> a + 1 | False -> a.
 
 ambientP env p =
-  {p | fwd = cullZone (map (hitAmb (ambFwd env)) p.fwd),
-       rear = cullZone (map (hitAmb (ambRear env)) p.rear)}.
+  {p | fwd = cullZone (List.map (hitAmb (ambFwd env)) p.fwd),
+       rear = cullZone (List.map (hitAmb (ambRear env)) p.rear)}.
 
 # ---- actions ------------------------------------------------------------------
 doPlay i g =
@@ -148,7 +150,7 @@ doPlay i g =
     False -> addLog "no such card" g
   | True -> playCard i (p.hand ! i) g.
 
-listLen xs = foldl lenAdd 0 xs.
+listLen xs = List.fold lenAdd 0 xs.
 lenAdd a x = a + 1.
 
 playCard i c g =
@@ -210,10 +212,10 @@ settleHit k c g =
 capEnv n = case n > 10 of True -> 10 | False -> n.
 
 healSlot s = case s of Empty -> Empty | Occ c -> Occ {c | hp = (case c.hp + 2 > c.mx of True -> c.mx | False -> c.hp + 2)}.
-doRepair g = p = me g; setMe g {p | fwd = map healSlot p.fwd}.
+doRepair g = p = me g; setMe g {p | fwd = List.map healSlot p.fwd}.
 
 scorch1 s = hitAmb 1 s.
-scorchP p = {p | fwd = cullZone (map scorch1 p.fwd)}.
+scorchP p = {p | fwd = cullZone (List.map scorch1 p.fwd)}.
 doScorch g = {g | env = capEnv (g.env + 2), p1 = scorchP g.p1, p2 = scorchP g.p2}.
 
 # attack from my lane k: enemy fwd in lane counters; empty fwd exposes rear;
@@ -390,7 +392,7 @@ board model =
         clickable "end" "" (node "span" "btn" [text "end turn"])
       ]
     ],
-    node "div" "flex flex-col gap-1" (map logRow g.log)
+    node "div" "flex flex-col gap-1" (List.map logRow g.log)
   ].
 
 view model =

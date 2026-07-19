@@ -1,8 +1,10 @@
 # todo2.sol — the todo app rebuilt on `use`d libraries: base (helpers),
+# sol:notypes — view DSL builds heterogeneous node records ({text} vs
+# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 # web (view vocabulary), auth (sign-in pattern). Compare with todo.sol:
 # the app is now ONLY its own logic.
 
-base = use "../lib/base#3fd0c068d1933075".
+base = use "../lib/base#4cb470f20dc4cca4".
 web = use "../lib/web#58daf7798782a78e".
 auth = use "../lib/auth#acd09476b55e38d0".
 
@@ -12,7 +14,7 @@ node = web.node.  text = web.text.  dynS = web.dynS.
 # ---- todos: one per line as "<done> <text>" in KV --------------------------
 parseItem line = (d, x) = base.splitFirst line; (base.pI d, x).
 parseTodos s | s == "" = [].
-parseTodos s = map parseItem (base.splitCh 10 s).
+parseTodos s = List.map parseItem (base.splitCh 10 s).
 
 serItem t = (d, x) = t; "{d} {x}".
 serTodos ts | ts == [] = "".
@@ -25,7 +27,7 @@ tAt i k ts = case ts of
   x :: rest -> (case i == k of True -> flipItem x :: rest | False -> x :: tAt i (k + 1) rest).
 
 isOpen t = (d, x) = t; d == 0.
-openCount ts = foldl countOpen 0 ts.
+openCount ts = List.fold countOpen 0 ts.
 countOpen a t = a + base.boolInt (isOpen t).
 
 save ts model = ({model | todos = ts}, Put "todos:{auth.unwrapU model}" (serTodos ts)).
@@ -45,8 +47,8 @@ update msg model =
   | ("refresh", v) -> (model, case auth.unwrapU model == "" of True -> None | False -> Get "todos:{auth.unwrapU model}" "gottodos")
   | ("gottodos", v) -> ({model | todos = parseTodos v}, None)
   | ("add", v) -> save ((0, v) :: model.todos) model
-  | ("toggle", v) -> save (tAt (parseInt v) 1 model.todos) model
-  | ("clear", v) -> save (filter isOpen model.todos) model
+  | ("toggle", v) -> save (tAt (Str.parse v) 1 model.todos) model
+  | ("clear", v) -> save (List.filter isOpen model.todos) model
   | _ -> (model, None).
 
 # ---- view --------------------------------------------------------------------

@@ -21,7 +21,7 @@ scaffold root =
 # ---- count lines across a directory of files (like wc -l *) ----
 lineCountAll dir =
   names = ls dir;
-  total = foldl (addLines dir) 0 names;
+  total = List.fold (addLines dir) 0 names;
   print "total lines under {dir}: {total}".
 addLines dir acc name =
   path = "{dir}/{name}";
@@ -33,7 +33,7 @@ countLines s = base.listLen (base.splitCh 10 s).
 # ---- prune: remove all files matching a suffix, transactionally ----
 pruneSuffix dir suf =
   names = ls dir;
-  hits = filter (endsWith suf) names;
+  hits = List.filter (endsWith suf) names;
   u = pruneList dir hits;
   print "pruned {base.listLen hits} '{suf}' file(s) from {dir}".
 # (endsWith already excludes dirs here since our .bak names are files)
@@ -41,7 +41,7 @@ pruneList dir names | names == [] = 0.
 pruneList dir names = case names of n :: r -> plStep dir n r.
 plStep dir n r = u = rm "{dir}/{n}"; pruneList dir r.
 endsWith suf s =
-  ls2 = strlen s; lf = strlen suf;
+  ls2 = Str.len s; lf = Str.len suf;
   case ls2 < lf of True -> False | False -> base.substr s (ls2 - lf + 1) ls2 == suf.
 
 > scaffold "/tmp/proj".

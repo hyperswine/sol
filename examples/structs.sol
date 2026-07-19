@@ -1,61 +1,48 @@
-# structs.sol — sigs, structs, and compile-time specialization.
+# structs.sol — the stdlib sigs/structs and row-dispatched operators.
 #
-# `N = Sig {...}` names a row; `N = Struct S1 S2 {...}` implements rows; `(s : Sig)` params make a
-# function generic over any conforming struct. Call sites with a struct
-# literal are monomorphized (s.f -> direct N.f globals); call sites where
-# the struct flows in as a value fall back to first-class records.
+# `+` is resolved by OPERAND TYPE at compile time: Int -> primitive opcode,
+# String -> Str.+, List -> List.+, sig-carrier -> s.(+) (then monomorphized
+# per struct by the specializer). No ++: one `+`, row polymorphism does it.
 
-Arith = Sig { add : t -> t -> t, zero : t }.
-Functor = Sig { fmap : (a -> b) -> t a -> t b }.
+# ---- operator dispatch on concrete types ------------------------------------
 
-# ---- structures -------------------------------------------------------------
+> print (1 + 2).
+> print ("con" + "cat").
+> print (str ([1,2] + [3,4])).
 
-Num = Struct Arith {
-  add = fn a b -> a + b,
-  zero = 0
-}.
+# ---- <structure>.<symbol> utilities -----------------------------------------
 
-Concat = Struct Arith {
-  add = fn a b -> strcat a b,
-  zero = ""
-}.
+> n = Str.len "hello"; print "Str.len = {n}".
+> print "List.len = {List.len [10,20,30]}".
+> print "List.rev = {str (List.rev [1,2,3])}".
+> print "List.map = {str (List.map (fn x -> x * x) [1,2,3])}".
+> print "List.find = {str (List.find (fn x -> x > 1) [1,2,3])}".
+> print "groupby parity = {str (List.groupby (fn x -> x - (x / 2) * 2) [1,2,3,4,5])}".
+> print "Numeric.clamp = {Numeric.clamp 0 10 42}".
 
-Listy = Struct Functor Arith {
-  fmap = fn f xs -> map f xs,
-  add = fn a b -> case a of
-    Nil -> b
-    | x :: rest -> x :: (Listy.add rest b),
-  zero = []
-}.
+# ---- generics over the sigs -------------------------------------------------
 
-# ---- generics over a sig ----------------------------------------------------
+# `a + b` at the CARRIER type resolves to s.(+); one definition serves
+# Numeric, Str, and List (all satisfy Add — Numeric via Arith, structurally)
+total (s : Add) xs = List.fold (fn a b -> a + b) s.zero xs.
 
-# fold any Arith over a list of its carrier
-total (s : Arith) xs = foldl s.add s.zero xs.
+> print "total Numeric = {total Numeric [1,2,3,4]}".
+> t = total Str ["so", "l", "!"]; print "total Str = {t}".
+> print "total List = {str (total List [[1],[2,3],[4]])}".
 
-# use a Functor twice — a generic calling into the struct's own field
-twice (s : Functor) f xs = s.fmap f (s.fmap f xs).
+# Arith generic: `k * x` at the carrier type resolves to s.(*) — the
+# operator IS the row-polymorphic call, no explicit projection needed
+scaleSum (s : Arith) k xs = total s (List.map (fn x -> k * x) xs).
 
-# a generic calling another generic with the struct passed through:
-# specialization must chase this transitively
-sumShifted (s : Arith) n xs = total s (map (fn x -> s.add x n) xs).
+> print "scaleSum Numeric 10 [1,2,3] = {scaleSum Numeric 10 [1,2,3]}".
 
-# ---- monomorphized call sites (struct literal at the call) ------------------
+# runtime struct choice: HM unifies the case arms, so the structs must
+# share BOTH carrier and field set (closed rows unify by label equality
+# — width subtyping applies where an OPEN row meets a closed one, i.e.
+# at `total`'s sig param, not between two concrete records)
+MaxN = Struct Add { (+) = fn a b -> Numeric.max a b, zero = 0 - 999999 }.
+MinN = Struct Add { (+) = fn a b -> Numeric.min a b, zero = 999999 }.
+pickI b = case b of True -> MinN | False -> MaxN.
 
-> print "total Num [1,2,3,4] = {total Num [1,2,3,4]}".
-> print "total Concat = {total Concat ["so", "l", "!"]}".
-> print "twice Listy (+3) [1,2,3] = {str (twice Listy (fn x -> x + 3) [1,2,3])}".
-> print "sumShifted Num 10 [1,2,3] = {sumShifted Num 10 [1,2,3]}".
-> print "Listy.add [1,2] [3,4] = {str (total Listy [[1,2],[3,4]])}".
-
-# ---- first-class fallback (struct as a runtime value) -----------------------
-
-# pick a struct at RUNTIME — cannot be monomorphized; the record flows in
-# and s.add / s.zero dispatch through record projection
-pick b = case b of True -> Num | False -> Concat.
-
-> chosen = pick True;
-  print "runtime-chosen total = {total chosen [5,6,7]}".
-
-# the record itself is an ordinary value
-> print "Num.zero = {Num.zero}; direct field call = {Num.add 40 2}".
+> chosen = pickI False;
+  print "runtime max-fold = {total chosen [3, 9, 4]}".

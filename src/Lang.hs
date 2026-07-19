@@ -71,17 +71,17 @@ data SPat
 
 data STop
   = TBind Name [SPat] (Maybe SExpr) SExpr
-  | TType Name Bool [(Name, [Ty])]
-  | TShape [Name]
+  | TType Name Bool [Name] [(Name, [Ty])]
+  | TShape Name [(Name, Ty)]
   | TSig Name ([Ty], Ty)
-  | TSigDef Name [Name] -- `sig Functor = { map }.` — a named row of field names
+  | TSigDef Name [(Name, Maybe Ty)] -- `Functor = Sig { fmap : ... }.` — a named row
   | TStruct Name [Name] [(Name, SExpr)] -- `struct Num : Arith = { add = ..., zero = 0 }.`
   | TEval SExpr -- `> expr.` : run for effect/value, in file order
   | TConAlias Name Name -- `T = mod.T.` : local alias for an imported constructor/type
   | TSkip
   deriving (Show)
 
-data Ty = TCon Name [Ty] | TVarT Name | TTup [Ty] | TOther
+data Ty = TCon Name [Ty] | TVarT Name | TTup [Ty] | TArrT Ty Ty | TVApp Name [Ty] | TOther
   deriving (Show)
 
 --------------------------------------------------------------------------------
@@ -448,8 +448,8 @@ sigDecl = try $ do
   where
     sigField = do
       f <- pName
-      _ <- optional (lexeme (char ':') *> some (noneOf ",}"))
-      pure f
+      mt <- optional (lexeme (char ':') *> (foldr1 TArrT <$> tyApp `sepBy1` symbol "->"))
+      pure (f, mt)
 
 -- `Num = Struct Arith MathOps { add = fn a b -> a + b, zero = 0 }.`
 -- Implemented sigs are juxtaposed after the keyword (type-argument style);
@@ -494,6 +494,7 @@ tyApp = do
   pure $ case atoms of
     [t] -> t
     (TCon n [] : args) -> TCon n args
+    (TVarT n : args) -> TVApp n args
     _ -> TOther
 
 tyAtom :: P Ty
@@ -510,7 +511,7 @@ tyAtom =
       t <- tyApp
       arrows <- many (try (symbol "->") *> tyApp)
       if not (null arrows)
-        then pure TOther
+        then pure (foldr1 TArrT (t : arrows))
         else do
           ts <- many (symbol "," *> tyApp)
           pure $ if null ts then t else TTup (t : ts)
@@ -522,14 +523,14 @@ typeDecl :: P STop
 typeDecl = do
   n <- upperName
   mult <- optional integer
-  _params <- many lowerName
+  params <- many lowerName
   eqSign
   _ <- symbol "Type"
   cons <-
     parens (conDecl `sepBy1` pipeSep)
       <|> newtypeCon n
   dotTerm
-  pure (TType n (mult == Just 1) cons)
+  pure (TType n (mult == Just 1) params cons)
   where
     conDecl = do
       c <- upperName
@@ -541,17 +542,17 @@ typeDecl = do
 
 shapeAlias :: P STop
 shapeAlias = do
-  _ <- upperName
+  n <- upperName
   eqSign
   fs <- braces (fieldDecl `sepBy1` symbol ",")
   dotTerm
-  pure (TShape fs)
+  pure (TShape n fs)
   where
     fieldDecl = do
       f <- pName
       _ <- lexeme (char ':')
-      _ <- some (noneOf ",}")
-      pure f
+      t <- foldr1 TArrT <$> tyApp `sepBy1` symbol "->"
+      pure (f, t)
 
 -- `T = myscript.T.` — alias an imported (module-qualified) constructor/type
 -- so it can be used in patterns and signatures under the local name
@@ -646,7 +647,7 @@ atomT = 6
 collectCons :: [STop] -> M.Map Name (Int, Int, Int)
 collectCons tops = withAliases (M.union builtinCons (M.fromList user))
   where
-    tdecls = [cs | TType _ _ cs <- tops]
+    tdecls = [cs | TType _ _ _ cs <- tops]
     user = concat (zipWith one [10 ..] tdecls)
     one tid cs = [(c, (tid, v, length tys)) | ((c, tys), v) <- zip cs [0 ..]]
     withAliases m = foldl' (\acc (t, tgt) -> maybe acc (\e -> M.insert t e acc) (M.lookup tgt m)) m
@@ -656,7 +657,7 @@ collectShapes :: [STop] -> M.Map [Name] Int
 collectShapes tops = M.fromList (zip allShapes [100 ..])
   where
     allShapes = nub (concatMap topShapes tops)
-    topShapes (TShape fs) = [sort fs]
+    topShapes (TShape _ fs) = [sort (map fst fs)]
     topShapes (TBind _ ps g b) =
       concatMap patShapes ps
         ++ maybe [] exprShapes g
@@ -1143,18 +1144,20 @@ shapeOfTy lin = \case
   TTup ts -> LTupS (map (shapeOfTy lin) ts)
   TCon n as -> if n `elem` lin || any (isLin . shapeOfTy lin) as then LL else LU
   TVarT _ -> LU
+  TArrT _ _ -> LU
+  TVApp _ _ -> LU
   TOther -> LU
 
 buildLinInfo :: [STop] -> LinInfo
 buildLinInfo tops = LinInfo lin sigs conSh conAr
   where
     aliases = [(t, tgt) | TConAlias t tgt <- tops]
-    lin0 = [n | TType n True _ <- tops]
+    lin0 = [n | TType n True _ _ <- tops]
     lin = lin0 ++ [t | (t, tgt) <- aliases, tgt `elem` lin0]
     sigs = M.fromList [(n, (map sh ps, sh r)) | TSig n (ps, r) <- tops]
-    conSh0 = M.fromList [(c, (if linear then LL else LU, map sh tys)) | TType _ linear cs <- tops, (c, tys) <- cs]
+    conSh0 = M.fromList [(c, (if linear then LL else LU, map sh tys)) | TType _ linear _ cs <- tops, (c, tys) <- cs]
     conSh = foldl' (\m (t, tgt) -> maybe m (\e -> M.insert t e m) (M.lookup tgt m)) conSh0 aliases
-    conAr0 = M.fromList [(c, length tys) | TType _ _ cs <- tops, (c, tys) <- cs]
+    conAr0 = M.fromList [(c, length tys) | TType _ _ _ cs2 <- tops, (c, tys) <- cs2]
     conAr = foldl' (\m (t, tgt) -> maybe m (\e -> M.insert t e m) (M.lookup tgt m)) conAr0 aliases
     sh = shapeOfTy lin
 
@@ -1427,15 +1430,26 @@ transformEP f pf = go
        in (SBindPat (pf p) x' : rest', bs')
 
 renameTops :: M.Map Name Name -> [STop] -> [STop]
-renameTops rn = map top
+renameTops rn tops0 = map top tops0
   where
     look n = M.findWithDefault n n rn
+    -- dotted-head renaming exists ONLY for struct field self-references
+    -- (`ListS.add` before the struct expands to flat globals). It must
+    -- NOT fire for other dotted names: diamond file-module imports leave
+    -- canonical cross-module refs like `logic.base.findCh` whose head
+    -- coincides with a use-binding name — renaming those dangles them.
+    structNames = S.fromList [n | TStruct n _ _ <- tops0]
+    lookDotted v = case M.lookup v rn of
+      Just r -> r
+      Nothing -> case break (== '.') v of
+        (h, '.' : rest) | S.member h structNames, M.member h rn -> look h ++ "." ++ rest
+        _ -> v
     top = \case
       TBind n ps g b ->
         let bs = S.fromList (concatMap patVars ps)
          in TBind (look n) (map rp ps) (fmap (re bs) g) (re bs b)
       TSig n (ps, r) -> TSig (look n) (map rt ps, rt r)
-      TType n l cs -> TType (look n) l [(look c, map rt tys) | (c, tys) <- cs]
+      TType n l ps cs -> TType (look n) l ps [(look c, map rt tys) | (c, tys) <- cs]
       TEval e -> TEval (re S.empty e)
       TConAlias t tgt -> TConAlias (look t) (look tgt)
       TSigDef n fs -> TSigDef (look n) fs
@@ -1454,11 +1468,7 @@ renameTops rn = map top
     step bs e = case e of
       SVar v | not (S.member v bs) -> SVar (lookDotted v)
       _ -> e
-    -- `ListS.add` (a struct field's flat global, referenced before the
-    -- struct expands) renames by its head segment: std.ListS.add
-    lookDotted v = case break (== '.') v of
-      (h, '.' : rest) | M.member h rn -> look h ++ "." ++ rest
-      _ -> look v
+
 
 -- every name a module defines at top level (what an importer may reference)
 topNames :: [STop] -> [Name]
@@ -1466,8 +1476,8 @@ topNames tops =
   concat
     [ [n | TBind n _ _ _ <- tops],
       [n | TSig n _ <- tops],
-      [n | TType n _ _ <- tops],
-      [c | TType _ _ cs <- tops, (c, _) <- cs],
+      [n | TType n _ _ _ <- tops],
+      [c | TType _ _ _ cs <- tops, (c, _) <- cs],
       [t | TConAlias t _ <- tops],
       [n | TSigDef n _ <- tops],
       [n | TStruct n _ _ <- tops]

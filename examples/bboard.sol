@@ -35,14 +35,14 @@ rev2 acc xs | xs == [] = acc.
 rev2 acc xs = case xs of x :: r -> rev2 (x :: acc) r.
 reverse xs = rev2 [] xs.
 
-pad3 s = case strlen s >= 3 of True -> s | False -> pad3 " {s}".
-pad4 s = case strlen s >= 4 of True -> s | False -> pad4 " {s}".
+pad3 s = case Str.len s >= 3 of True -> s | False -> pad3 " {s}".
+pad4 s = case Str.len s >= 4 of True -> s | False -> pad4 " {s}".
 
 iabs n = case n < 0 of True -> 0 - n | False -> n.
 
 # ---------- tokenizing ----------
 nonEmpty s = s != "".
-words ln = filter nonEmpty (base.splitCh 32 ln).
+words ln = List.filter nonEmpty (base.splitCh 32 ln).
 upC c = case base.and2 (c >= 97) (c <= 122) of True -> c - 32 | False -> c.
 
 # ---------- parsing ----------
@@ -53,7 +53,7 @@ parseLine ln =
 
 parseWs ws =
   nm = ws ! 1;
-  k = upC (charAt nm 1);
+  k = upC (Str.at nm 1);
   case base.or2 (k == 42) (k == 46) of  # '*' comment, '.' directive
     True -> []
   | False -> parseKind k nm ws (base.listLen ws).
@@ -95,7 +95,7 @@ sKey row side = row * 2 + side.
 sRow k = k / 2.
 sSide k = k - (k / 2) * 2.
 
-holeLetter side col = chr (97 + side * 5 + col - 1).
+holeLetter side col = Str.fromCode (97 + side * 5 + col - 1).
 holeLabel k col = "{holeLetter (sSide k) col}{sRow k}".
 
 # ---------- placement state ----------
@@ -327,7 +327,7 @@ runBoard title ls =
   u0 = print "";
   u1 = print "=== {title} ===";
   comps = parseNetlist ls;
-  placeable = filter notSource comps;
+  placeable = List.filter notSource comps;
   pwrs = pwrNetsOf comps;
   nets = reverse (netsOf placeable);
   st = placeAll placeable st0;

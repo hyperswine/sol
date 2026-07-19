@@ -73,7 +73,7 @@ progC = [
   "> run (cpu 0 0 0 0 0) 3 R?"
 ].
 
-showSols sols | sols == [] = 0.
+showSols sols | sols == [] = Unit.
 showSols sols = case sols of s :: r -> ssStep s r.
 ssStep s r = u = print "  {s}"; showSols r.
 
@@ -98,7 +98,7 @@ runProgram title extra =
 
 appendL xs ys | xs == [] = ys.
 appendL xs ys = case xs of x :: r -> x :: appendL r ys.
-lenL xs = foldl l1 0 xs.
+lenL xs = List.fold l1 0 xs.
 l1 a x = a + 1.
 
 > runProgram "program A: 45 + 200 = 245" progA.

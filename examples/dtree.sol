@@ -88,7 +88,7 @@ part feat th xs ls rs = case xs of
 buildVec xs v | xs == [] = v.
 buildVec xs v = case xs of p :: r -> buildVec r (Vec.push p v).
 
-listLen xs = foldl len1 0 xs.
+listLen xs = List.fold len1 0 xs.
 len1 a x = a + 1.
 
 majorityLeaf n np = Leaf (case np * 2 >= n of True -> 65536 | False -> 0 - 65536).

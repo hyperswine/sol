@@ -1,10 +1,12 @@
 # pos.sol — point of sale with cashier sign-in. Catalog is static Sol data;
+# sol:notypes — view DSL builds heterogeneous node records ({text} vs
+# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 # the cart is runtime state; store-wide revenue accumulates in KV and is
 # shared across every cashier and every restart.
 
 base = use "../lib/base".
 
-pI s = case s == "" of True -> 0 | False -> parseInt s.
+pI s = case s == "" of True -> 0 | False -> Str.parse s.
 unwrapU model = case model.user of Persistent u -> u.
 
 doLogin v model = (u, p) = base.splitFirst v; ({model | pendu = u, pendp = p}, Get "user:{u}" "auth").
@@ -25,7 +27,7 @@ catalog = [("flat white", 5), ("long black", 4), ("cheese toastie", 9), ("browni
 priceOf t = (n, p) = t; p.
 nameOf t = (n, p) = t; n.
 addPrice a t = a + priceOf t.
-cartTotal cart = foldl addPrice 0 cart.
+cartTotal cart = List.fold addPrice 0 cart.
 
 init tok = {user = Persistent "", pendu = "", pendp = "", note = "", cart = [], revenue = ""}.
 
@@ -40,7 +42,7 @@ update msg model =
   | ("connected", v) -> (model, Msg "refresh" "")
   | ("refresh", v) -> (model, case unwrapU model == "" of True -> None | False -> Get "revenue" "gotrev")
   | ("gotrev", v) -> ({model | revenue = str (pI v)}, None)
-  | ("buy", v) -> ({model | cart = (catalog ! parseInt v) :: model.cart}, None)
+  | ("buy", v) -> ({model | cart = (catalog ! Str.parse v) :: model.cart}, None)
   | ("void", v) -> ({model | cart = []}, None)
   | ("checkout", v) -> (model, case model.cart == [] of True -> None | False -> Get "revenue" "dorev")
   | ("dorev", v) ->
@@ -87,7 +89,7 @@ posView model =
     node "div" "grid grid-cols-2 gap-3" (productGrid 1 catalog),
     node "div" "card flex flex-col gap-2" [
       node "h3" "font-bold" [text "cart - total ${cartTotal model.cart}"],
-      node "div" "flex flex-col gap-1" (map cartRow model.cart),
+      node "div" "flex flex-col gap-1" (List.map cartRow model.cart),
       node "div" "flex flex-row gap-2" [
         clickable "checkout" "" (node "span" "btn" [text "checkout"]),
         clickable "void" "" (node "span" "tab" [text "void"])

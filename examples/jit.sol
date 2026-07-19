@@ -15,16 +15,16 @@ collatzLen n | (n / 2) * 2 == n = 1 + collatzLen (n / 2).
 collatzLen n = 1 + collatzLen (3 * n + 1).
 
 # below threshold: interpreted (no [jit] line)
-> foldl plus 0 (map square (iota 10)).
+> List.fold plus 0 (List.map square (iota 10)).
 
 # over threshold: compiled (watch the [jit] lines, each fn compiles once)
 > xs = iota 2000;
-  foldl plus 0 (map square xs).
+  List.fold plus 0 (List.map square xs).
 > xs = iota 2000;
-  foldl plus 0 (filter big (map square xs)).
-> foldl plus 0 (map collatzLen (iota 5000)).
+  List.fold plus 0 (List.filter big (List.map square xs)).
+> List.fold plus 0 (List.map collatzLen (iota 5000)).
 
 # NOT jittable (string result): same call shape, interpreter takes it
 shout x | x > 1995 = "big {x}".
 shout x = "small".
-> (map shout (iota 2000)) ! 1.
+> (List.map shout (iota 2000)) ! 1.

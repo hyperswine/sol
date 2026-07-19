@@ -1,10 +1,12 @@
 # dash.sol — a live dashboard with sign-in. Metrics tick server-side and
+# sol:notypes — view DSL builds heterogeneous node records ({text} vs
+# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 # push to the browser (no client events). Total sign-ins persist in KV;
 # the live series is runtime state, abandoned on restart by design.
 
 base = use "../lib/base".
 
-pI s = case s == "" of True -> 0 | False -> parseInt s.
+pI s = case s == "" of True -> 0 | False -> Str.parse s.
 unwrapU model = case model.user of Persistent u -> u.
 
 doLogin v model = (u, p) = base.splitFirst v; ({model | pendu = u, pendp = p}, Get "user:{u}" "auth").
@@ -39,7 +41,7 @@ update msg model =
   | ("refresh", v) -> (model, case unwrapU model == "" of True -> None | False -> Get "logins" "gotlogins")
   | ("gotlogins", v) -> ({model | logins = v}, None)
   | ("tick", v) -> (model, case unwrapU model == "" of True -> None | False -> Rng 20 95 "sample")
-  | ("sample", v) -> ({model | reqs = parseInt v, series = takeN 10 (parseInt v :: model.series)}, None)
+  | ("sample", v) -> ({model | reqs = Str.parse v, series = takeN 10 (Str.parse v :: model.series)}, None)
   | _ -> (model, None).
 
 node tag cls kids = {cls = cls, kids = kids, tag = tag}.
@@ -79,7 +81,7 @@ dashView model =
       ],
       node "div" "card flex flex-col gap-1" [
         node "h3" "font-bold" [text "history"],
-        node "div" "flex flex-col gap-1" (map sampleRow model.series)
+        node "div" "flex flex-col gap-1" (List.map sampleRow model.series)
       ],
       node "div" "card flex flex-col gap-1" [
         node "h3" "font-bold" [text "about"],

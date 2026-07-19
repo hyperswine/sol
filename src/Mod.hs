@@ -1,8 +1,11 @@
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
 
--- Mod.hs — the file module system.
+-- Mod.hs — the FILE module system (Modula-style: units of distribution
+-- and isolation). Not to be confused with ML-style modules — signatures
+-- and structures — which live in Struct.hs/Infer.hs and are units of
+-- interface and dispatch. See README "Two kinds of module".
 --
--- Every .sol file IS a module, addressed by content:
+-- Every .sol file IS a file module, addressed by content:
 --
 --     mymod = use "mymod#4f2a...".
 --
@@ -31,7 +34,7 @@ import System.Directory (doesFileExist)
 import System.Environment (getExecutablePath)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
-import System.Process (proc, readCreateProcessWithExitCode)
+import System.Process (readCreateProcessWithExitCode, proc)
 import Text.Megaparsec (errorBundlePretty, parse)
 
 -- FNV-1a 64 over the printed AST: deterministic, dependency-free.
@@ -67,7 +70,13 @@ resolveModule baseDir spec = do
   pure $ case r of
     Left e -> Left e
     Right (p, h)
-      | pinned && h /= wantHash -> Left ("use: hash mismatch for " ++ name ++ ":\n  pinned  #" ++ wantHash ++ "\n  on disk #" ++ h ++ "\n(the module's AST changed since it was pinned)")
+      | pinned && h /= wantHash ->
+          Left
+            ( "use: hash mismatch for " ++ name
+                ++ ":\n  pinned  #" ++ wantHash
+                ++ "\n  on disk #" ++ h
+                ++ "\n(the module's AST changed since it was pinned)"
+            )
       | otherwise -> Right (p, h, pinned)
 
 -- spawn `sol <path>` with `str x` on stdin; capture stdout. Hash
@@ -78,10 +87,12 @@ runModule path wantHash stdinStr = do
   case r of
     Left e -> pure (Left e)
     Right (_, h)
-      | h /= wantHash -> pure (Left ("run: module " ++ path ++ " changed since `use` (was #" ++ wantHash ++ ", now #" ++ h ++ ")"))
+      | h /= wantHash ->
+          pure (Left ("run: module " ++ path ++ " changed since `use` (was #" ++ wantHash ++ ", now #" ++ h ++ ")"))
       | otherwise -> do
           self <- getExecutablePath
           (code, out, err) <- readCreateProcessWithExitCode (proc self [path]) stdinStr
           pure $ case code of
             ExitSuccess -> Right out
-            ExitFailure n -> Left ("run: module " ++ path ++ " exited with code " ++ show n ++ (if null err then "" else ":\n" ++ err) ++ (if null out then "" else "\npartial stdout:\n" ++ out))
+            ExitFailure n ->
+              Left ("run: module " ++ path ++ " exited with code " ++ show n ++ (if null err then "" else ":\n" ++ err) ++ (if null out then "" else "\npartial stdout:\n" ++ out))

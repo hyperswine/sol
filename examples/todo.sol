@@ -1,12 +1,14 @@
 # todo.sol — todos with sign-in. Accounts + todo lists live in the shared
+# sol:notypes — view DSL builds heterogeneous node records ({text} vs
+# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 # KV store (todo.solkv), so your list follows your login across browsers.
 # The signed-in user is `Persistent` (event-sourced, survives restarts);
 # the in-model todo list is runtime state, refreshed from KV on connect.
 
 base = use "../lib/base".
 
-nl = chr 10.
-pI s = case s == "" of True -> 0 | False -> parseInt s.
+nl = Str.fromCode 10.
+pI s = case s == "" of True -> 0 | False -> Str.parse s.
 
 # ---- auth (the shared pattern: KV accounts + replay-safe Msg setuser) ----
 unwrapU model = case model.user of Persistent u -> u.
@@ -32,7 +34,7 @@ doRegchk stored model =
   | False -> ({model | note = "user already exists"}, None).
 
 # ---- todos: serialized one per line as "<done> <text>" in KV -------------
-findNl s i = case i > strlen s of True -> 0 | False -> (case charAt s i == 10 of True -> i | False -> findNl s (i + 1)).
+findNl s i = case i > Str.len s of True -> 0 | False -> (case Str.at s i == 10 of True -> i | False -> findNl s (i + 1)).
 
 parseItem line = (d, x) = base.splitFirst line; (pI d, x).
 
@@ -41,7 +43,7 @@ parseTodos s =
   k = findNl s 1;
   case k of
     0 -> [parseItem s]
-  | _ -> parseItem (substr s 1 (k - 1)) :: parseTodos (substr s (k + 1) (strlen s)).
+  | _ -> parseItem (substr s 1 (k - 1)) :: parseTodos (substr s (k + 1) (Str.len s)).
 
 serItem t = (d, x) = t; "{d} {x}".
 
@@ -56,7 +58,7 @@ tAt i k ts = case ts of
   x :: rest -> (case i == k of True -> flipItem x :: rest | False -> x :: tAt i (k + 1) rest).
 
 isOpen t = (d, x) = t; d == 0.
-openCount ts = foldl (fn a t -> a + (case isOpen t of True -> 1 | False -> 0)) 0 ts.
+openCount ts = List.fold (fn a t -> a + (case isOpen t of True -> 1 | False -> 0)) 0 ts.
 
 save ts model = ({model | todos = ts}, Put "todos:{unwrapU model}" (serTodos ts)).
 
@@ -75,8 +77,8 @@ update msg model =
   | ("refresh", v) -> (model, case unwrapU model == "" of True -> None | False -> Get "todos:{unwrapU model}" "gottodos")
   | ("gottodos", v) -> ({model | todos = parseTodos v}, None)
   | ("add", v) -> save ((0, v) :: model.todos) model
-  | ("toggle", v) -> save (tAt (parseInt v) 1 model.todos) model
-  | ("clear", v) -> save (filter isOpen model.todos) model
+  | ("toggle", v) -> save (tAt (Str.parse v) 1 model.todos) model
+  | ("clear", v) -> save (List.filter isOpen model.todos) model
   | _ -> (model, None).
 
 # ---- view -------------------------------------------------------------------

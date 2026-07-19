@@ -1,4 +1,6 @@
 # blog.sol — an MVU web app. Sol owns init/update/view; the gen_view
+# sol:notypes — view DSL builds heterogeneous node records ({text} vs
+# {tag,cls,kids} in one list); typing this needs a Node ADT in gen_view.
 # behavior (Web.hs) owns HTTP, WebSockets, sessions, and dyn-slot diffing.
 #
 #   ./sol examples/blog.sol      then open http://localhost:8080
@@ -34,12 +36,12 @@ init tok = {tab = Persistent 1, comments = Persistent [], lucky = 0, ticks = 0, 
 
 update msg model =
   case msg of
-    ("tab", v) -> ({model | tab = Persistent (parseInt v)}, None)
+    ("tab", v) -> ({model | tab = Persistent (Str.parse v)}, None)
   | ("comment", v) ->
       ({model | comments = Persistent ((unwrap model.tab, v) :: unwrap model.comments)},
        Print "new comment: {v}")
   | ("luck", v) -> (model, Rng 1 100 "lucky")
-  | ("lucky", v) -> ({model | lucky = parseInt v}, None)
+  | ("lucky", v) -> ({model | lucky = Str.parse v}, None)
   | ("motd", v) -> (model, ReadFile "/tmp/motd.txt" "gotmotd")
   | ("gotmotd", v) -> ({model | motd = v}, None)
   | ("tick", v) -> ({model | ticks = model.ticks + 1}, None)
@@ -52,7 +54,7 @@ tabBtn cur i =
   clickable "tab" (str i) (node "span" (tabCls cur i) [text p.title]).
 
 tabBar cur =
-  node "nav" "flex flex-row flex-wrap gap-2" (map (tabBtn cur) [1, 2, 3]).
+  node "nav" "flex flex-row flex-wrap gap-2" (List.map (tabBtn cur) [1, 2, 3]).
 
 postView tab =
   p = posts ! tab;
@@ -65,10 +67,10 @@ isFor tab c = (i, t) = c; i == tab.
 commentItem c = (i, t) = c; node "div" "comment" [text t].
 
 commentsView tab comments =
-  mine = filter (isFor tab) comments;
+  mine = List.filter (isFor tab) comments;
   node "section" "card flex flex-col gap-3" [
     node "h3" "font-bold" [text "Comments"],
-    node "div" "flex flex-col gap-1" (map commentItem mine),
+    node "div" "flex flex-col gap-1" (List.map commentItem mine),
     inputBox "comment" "write a comment..." "Post"
   ].
 
