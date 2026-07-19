@@ -56,8 +56,8 @@ type LRef = Ptr () -- contexts, modules, builders, types, values, blocks, ...
 
 foreign import ccall "sol_llvm_init" c_llvm_init :: IO Int
 
-foreign import ccall "LLVMOrcCreateNewThreadSafeContext" c_tscCreate :: IO LRef
-foreign import ccall "LLVMOrcThreadSafeContextGetContext" c_tscCtx :: LRef -> IO LRef
+foreign import ccall "LLVMContextCreate" c_ctxCreate :: IO LRef
+foreign import ccall "LLVMOrcCreateNewThreadSafeContextFromLLVMContext" c_tscFromCtx :: LRef -> IO LRef
 foreign import ccall "LLVMOrcCreateNewThreadSafeModule" c_tsmCreate :: LRef -> LRef -> IO LRef
 foreign import ccall "LLVMOrcCreateLLJIT" c_lljitCreate :: Ptr LRef -> LRef -> IO LRef
 foreign import ccall "LLVMOrcLLJITGetMainJITDylib" c_lljitDylib :: LRef -> IO LRef
@@ -117,7 +117,6 @@ pEQ = 32; pNE = 33; pSGT = 38; pSGE = 39; pSLT = 40; pSLE = 41
 
 data JitCtx = JitCtx
   { jcJit :: LRef,
-    jcTSC :: LRef,
     jcCache :: IORef (M.Map (String, Name) Int64), -- (scheme, fn) -> address
     jcCount :: IORef Int
   }
@@ -148,10 +147,9 @@ initJIT = do
       if jitp == nullPtr
         then pure Nothing
         else do
-          tsc <- c_tscCreate
           cache <- newIORef M.empty
           cnt <- newIORef 0
-          pure (Just (JitCtx jitp tsc cache cnt))
+          pure (Just (JitCtx jitp cache cnt))
 
 -- ---- JITtability: arithmetic-only Core, closed over other such fns --------
 
@@ -364,7 +362,10 @@ compileScheme jc prog scheme root = do
       Just closure -> do
         k <- atomicModifyIORef' (jcCount jc) (\c -> (c + 1, c))
         let sym = "sol_" ++ scheme ++ "_" ++ mangle root ++ "_" ++ show k
-        ctx <- c_tscCtx (jcTSC jc)
+        -- LLVM 22+: each compiled module gets its own plain LLVMContext;
+        -- wrap it into a ThreadSafeContext right before handing the module
+        -- to the JIT. (LLVMOrcThreadSafeContextGetContext was removed.)
+        ctx <- c_ctxCreate
         md <- nm sym $ \s -> c_modCreate s ctx
         b <- c_builderCreate ctx
         i64 <- c_i64 ctx
@@ -379,7 +380,8 @@ compileScheme jc prog scheme root = do
         let Just (ps, _) = M.lookup root closure
         buildDriver2 cg md ptrTy scheme sym (decls M.! root) (length ps)
         c_builderDispose b
-        tsm <- c_tsmCreate md (jcTSC jc)
+        tsc <- c_tscFromCtx ctx
+        tsm <- c_tsmCreate md tsc
         dylib <- c_lljitDylib (jcJit jc)
         e <- c_lljitAddModule (jcJit jc) dylib tsm
         bad <- checkErr "add module" e
@@ -669,7 +671,8 @@ compileVecScheme jc prog scheme root scalar intCols laySig nEx = do
           else do
             k <- atomicModifyIORef' (jcCount jc) (\c -> (c + 1, c))
             let sym = "sol_" ++ scheme ++ "_" ++ mangle root ++ "_" ++ show k
-            ctx <- c_tscCtx (jcTSC jc)
+            -- LLVM 22+: fresh context per module (see compileScheme)
+            ctx <- c_ctxCreate
             md <- nm sym $ \s -> c_modCreate s ctx
             b <- c_builderCreate ctx
             i64 <- c_i64 ctx
@@ -707,7 +710,8 @@ compileVecScheme jc prog scheme root scalar intCols laySig nEx = do
             _ <- c_bRet b r
             buildVecDriver cg md ptrTy scheme sym (dual, dualTy) nEx
             c_builderDispose b
-            tsm <- c_tsmCreate md (jcTSC jc)
+            tsc <- c_tscFromCtx ctx
+            tsm <- c_tsmCreate md tsc
             dylib <- c_lljitDylib (jcJit jc)
             e <- c_lljitAddModule (jcJit jc) dylib tsm
             bad <- checkErr "add module" e
