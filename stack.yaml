@@ -1,7 +1,0 @@
-snapshot: nightly-2024-09-30
-system-ghc: true
-
-packages:
-- .
-
-# local-bin-path: examples
