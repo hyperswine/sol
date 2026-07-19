@@ -31,7 +31,7 @@ import System.Directory (doesFileExist)
 import System.Environment (getExecutablePath)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
-import System.Process (readCreateProcessWithExitCode, proc)
+import System.Process (proc, readCreateProcessWithExitCode)
 import Text.Megaparsec (errorBundlePretty, parse)
 
 -- FNV-1a 64 over the printed AST: deterministic, dependency-free.
@@ -67,13 +67,7 @@ resolveModule baseDir spec = do
   pure $ case r of
     Left e -> Left e
     Right (p, h)
-      | pinned && h /= wantHash ->
-          Left
-            ( "use: hash mismatch for " ++ name
-                ++ ":\n  pinned  #" ++ wantHash
-                ++ "\n  on disk #" ++ h
-                ++ "\n(the module's AST changed since it was pinned)"
-            )
+      | pinned && h /= wantHash -> Left ("use: hash mismatch for " ++ name ++ ":\n  pinned  #" ++ wantHash ++ "\n  on disk #" ++ h ++ "\n(the module's AST changed since it was pinned)")
       | otherwise -> Right (p, h, pinned)
 
 -- spawn `sol <path>` with `str x` on stdin; capture stdout. Hash
@@ -84,12 +78,10 @@ runModule path wantHash stdinStr = do
   case r of
     Left e -> pure (Left e)
     Right (_, h)
-      | h /= wantHash ->
-          pure (Left ("run: module " ++ path ++ " changed since `use` (was #" ++ wantHash ++ ", now #" ++ h ++ ")"))
+      | h /= wantHash -> pure (Left ("run: module " ++ path ++ " changed since `use` (was #" ++ wantHash ++ ", now #" ++ h ++ ")"))
       | otherwise -> do
           self <- getExecutablePath
           (code, out, err) <- readCreateProcessWithExitCode (proc self [path]) stdinStr
           pure $ case code of
             ExitSuccess -> Right out
-            ExitFailure n ->
-              Left ("run: module " ++ path ++ " exited with code " ++ show n ++ (if null err then "" else ":\n" ++ err) ++ (if null out then "" else "\npartial stdout:\n" ++ out))
+            ExitFailure n -> Left ("run: module " ++ path ++ " exited with code " ++ show n ++ (if null err then "" else ":\n" ++ err) ++ (if null out then "" else "\npartial stdout:\n" ++ out))

@@ -199,10 +199,7 @@ initJIT = do
 
 -- Exhaustive bool matches desugar as
 --   CIf (CTagEq bool True s) a (CIf (CTagEq bool False s) b (CErr "no match"))
--- The CErr tail is unreachable: when the inner CIf runs, the outer test
--- already failed, so the complementary test must hold. Strip it, so
--- `case c of True -> a | False -> b` is JITtable. Non-bool case tails
--- (reachable) keep their CErr and stay interpreter-only.
+-- The CErr tail is unreachable: when the inner CIf runs, the outer test already failed, so the complementary test must hold. Strip it, so `case c of True -> a | False -> b` is JITtable. Non-bool case tails (reachable) keep their CErr and stay interpreter-only.
 simpCore :: Core -> Core
 simpCore = go
   where
@@ -266,6 +263,8 @@ checkAll cl =
 
 -- ---- codegen ---------------------------------------------------------------
 
+-- Need to deal with LLVM IR
+
 data CG = CG {cgB :: LRef, cgCtx :: LRef, cgI64 :: LRef, cgFns :: M.Map Name (LRef, LRef)}
 
 nm :: String -> (CString -> IO a) -> IO a
@@ -275,12 +274,7 @@ zero64, one64 :: CG -> IO LRef
 zero64 cg = c_constInt (cgI64 cg) 0 0
 one64 cg = c_constInt (cgI64 cg) 1 0
 
--- every Sol function becomes: i64 f(ptr fuel, i64 a1, ..., i64 an)
--- with a reified fuel decrement at entry — the compiler-inserted safepoint,
--- carried into native code.
--- symbols are prefixed per compilation unit: two schemes sharing helpers
--- (e.g. every gradient fold pulling in fix.fmul) must not collide in the
--- JITDylib; internal calls go through handles, so only symbols need this
+-- every Sol function becomes: i64 f(ptr fuel, i64 a1, ..., i64 an) with a reified fuel decrement at entry — the compiler-inserted safepoint, carried into native code. symbols are prefixed per compilation unit: two schemes sharing helpers (e.g. every gradient fold pulling in fix.fmul) must not collide in the JITDylib; internal calls go through handles, so only symbols need this
 declareFn :: CG -> LRef -> LRef -> String -> Name -> Int -> IO (LRef, LRef)
 declareFn cg md ptrTy pre n ar = do
   let argTys = ptrTy : replicate ar (cgI64 cg)
@@ -536,9 +530,7 @@ runFold addr pfuel acc0 xs = do
 -- driver emits KEPT ROW INDICES; the VM gathers full rows (including boxed
 -- columns) from them — natively computed predicate, Haskell-side row move.
 
--- can this body run as a dual over the given layout? The elem param — or any
--- let-alias of it (the clause compiler rebinds params: CLet p (CVar a1_k))
--- — may ONLY appear as CProj onto an int column (SoA) or bare (scalar int).
+-- can this body run as a dual over the given layout? The elem param — or any let-alias of it (the clause compiler rebinds params: CLet p (CVar a1_k)) — may ONLY appear as CProj onto an int column (SoA) or bare (scalar int).
 jitOKVec :: M.Map Name Int -> Bool -> [Bool] -> Name -> [Name] -> Core -> Bool
 jitOKVec fnAr scalar intCols elemP0 locals0 = ok (S.singleton elemP0) locals0
   where
@@ -579,8 +571,7 @@ loadColAt cg va k = do
   pe <- withArrayLen [vaIdx va] $ \len p -> nm "pe" $ c_bGEP b i64 base p len
   nm "colv" $ c_bLoad b i64 pe
 
--- cgExpr with the dual hook: the element param (and its let-aliases)
--- resolves to column loads
+-- cgExpr with the dual hook: the element param (and its let-aliases) resolves to column loads
 cgExprV :: CG -> LRef -> Maybe VecAccess -> M.Map Name LRef -> Core -> IO LRef
 cgExprV cg fuel mva env0 e0 = go (maybe S.empty (S.singleton . vaParam) mva) env0 e0
   where
@@ -663,11 +654,7 @@ cgArith cg op x y = case op of
       c <- nm "cmp" $ c_bICmp b p x y
       nm "cmpz" $ c_bZExt b c (cgI64 cg)
 
--- compile a (vec scheme, element fn, layout, #captured-ints) tuple.
--- Partial application: `Vec.fold (grad w1 w2 b) 0 v` captures w1 w2 b as
--- leading i64 params of the dual, delivered through the driver's extras
--- array at CALL time — one compilation serves every parameter value, which
--- is what makes JITted gradient-descent epochs possible.
+-- compile a (vec scheme, element fn, layout, #captured-ints) tuple. Partial application: `Vec.fold (grad w1 w2 b) 0 v` captures w1 w2 b as leading i64 params of the dual, delivered through the driver's extras array at CALL time — one compilation serves every parameter value, which is what makes JITted gradient-descent epochs possible.
 compileVecScheme :: JitCtx -> Prog -> String -> Name -> Bool -> [Bool] -> String -> Int -> IO (Maybe Int64)
 compileVecScheme jc prog scheme root scalar intCols laySig nEx = do
   let key = (scheme ++ "|" ++ laySig ++ "|" ++ show nEx, root)
@@ -753,8 +740,7 @@ compileVecScheme jc prog scheme root scalar intCols laySig nEx = do
                     atomicModifyIORef' (jcCache jc) (\m -> (M.insert key addr m, ()))
                     pure (Just addr)
 
--- same loop skeletons as the list drivers, cols instead of a data pointer.
--- vecfilter writes KEPT INDICES to out (the VM gathers rows from them).
+-- same loop skeletons as the list drivers, cols instead of a data pointer. vecfilter writes KEPT INDICES to out (the VM gathers rows from them).
 buildVecDriver :: CG -> LRef -> LRef -> String -> String -> (LRef, LRef) -> Int -> IO ()
 buildVecDriver cg md ptrTy scheme sym (ef, efTy) nEx = do
   let i64 = cgI64 cg
@@ -833,8 +819,7 @@ buildVecDriver cg md ptrTy scheme sym (ef, efTy) nEx = do
   _ <- c_bRet b out
   pure ()
 
--- invoke a vec driver: cols is the lent column-pointer array; extras are
--- the captured scalars of a partially-applied element function
+-- invoke a vec driver: cols is the lent column-pointer array; extras are the captured scalars of a partially-applied element function
 runVecMapFilter :: Int64 -> Ptr Int64 -> [Int64] -> Ptr (Ptr Int64) -> Int -> IO (Int64, [Int64])
 runVecMapFilter addr pfuel extras cols n = do
   let f = mkDrv5 (castPtrToFunPtr (intPtrToPtr (fromIntegral addr)))

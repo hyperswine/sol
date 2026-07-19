@@ -50,13 +50,7 @@ structTable :: [STop] -> Structs
 structTable tops = M.fromList [(n, (sigs, map fst fs)) | TStruct n sigs fs <- tops]
 
 genericTable :: [STop] -> Generics
-genericTable tops =
-  M.fromList
-    [ (n, anns)
-      | TBind n ps _ _ <- tops,
-        let anns = [(i, sg) | (i, PSig _ sg) <- zip [0 ..] ps],
-        not (null anns)
-    ]
+genericTable tops = M.fromList [(n, anns) | TBind n ps _ _ <- tops, let anns = [(i, sg) | (i, PSig _ sg) <- zip [0 ..] ps], not (null anns)]
 
 -- ---- struct expansion + declared-conformance check --------------------------
 
@@ -68,10 +62,7 @@ conformErrs sigs sname declared fields = concatMap one declared
       Nothing -> ["struct " ++ sname ++ ": unknown sig " ++ sg]
       Just row -> case row \\ fields of
         [] -> []
-        missing ->
-          [ "struct " ++ sname ++ " does not satisfy sig " ++ sg
-              ++ ": missing " ++ intercalate ", " missing
-          ]
+        missing -> ["struct " ++ sname ++ " does not satisfy sig " ++ sg ++ ": missing " ++ intercalate ", " missing]
 
 -- expand `struct N : ... = {f = e, ...}` into:
 --   N.f = e.          (an n-ary function if e is a lambda, else a CAF)
@@ -80,20 +71,11 @@ expandStructs :: [STop] -> ([String], [STop])
 expandStructs tops = (errs, concatMap one tops)
   where
     sigs = sigTable tops
-    errs =
-      concat [conformErrs sigs n ss (map fst fs) | TStruct n ss fs <- tops]
-        ++ dups
-    dups =
-      [ "duplicate struct/sig name: " ++ n
-        | n <- M.keys (M.filter (> (1 :: Int)) counts)
-      ]
-    counts =
-      foldl' (\m n -> M.insertWith (+) n 1 m) M.empty $
-        [n | TSigDef n _ <- tops] ++ [n | TStruct n _ _ <- tops]
+    errs = concat [conformErrs sigs n ss (map fst fs) | TStruct n ss fs <- tops] ++ dups
+    dups = ["duplicate struct/sig name: " ++ n | n <- M.keys (M.filter (> (1 :: Int)) counts)]
+    counts = foldl' (\m n -> M.insertWith (+) n 1 m) M.empty $ [n | TSigDef n _ <- tops] ++ [n | TStruct n _ _ <- tops]
     one = \case
-      TStruct n _ fs ->
-        [fieldBind (qual n f) e | (f, e) <- fs]
-          ++ [TBind n [] Nothing (SRec [(f, SVar (qual n f)) | (f, _) <- fs])]
+      TStruct n _ fs -> [fieldBind (qual n f) e | (f, e) <- fs] ++ [TBind n [] Nothing (SRec [(f, SVar (qual n f)) | (f, _) <- fs])]
       t -> [t]
     qual n f = n ++ "." ++ f
     -- a lambda field becomes a real n-ary global (direct CALLs, JITtable);
@@ -120,10 +102,7 @@ substStruct sub = transformE step S.empty
     -- Struct names are uppercase, locals lowercase: no collision.
     targets = S.fromList (M.elems sub)
     step bs e = case e of
-      SProj (SVar n) (f : rest)
-        | S.member n targets ->
-            let base = SVar (n ++ "." ++ f)
-             in if null rest then base else SProj base rest
+      SProj (SVar n) (f : rest) | S.member n targets -> let base = SVar (n ++ "." ++ f) in if null rest then base else SProj base rest
       SVar s | Just n <- M.lookup s sub, not (S.member s bs) -> SVar n
       _ -> e
 
@@ -138,9 +117,7 @@ specialize sigs structs tops0 = go 0 tops0 (SpecSt S.empty [] [])
   where
     generics0 = genericTable tops0
     -- bodies of generic functions, for cloning
-    genBodies =
-      M.fromList
-        [(n, (ps, g, b)) | TBind n ps g b <- tops0, M.member n generics0]
+    genBodies = M.fromList [(n, (ps, g, b)) | TBind n ps g b <- tops0, M.member n generics0]
 
     go :: Int -> [STop] -> SpecSt -> ([String], [STop])
     go depth tops st
@@ -149,9 +126,7 @@ specialize sigs structs tops0 = go 0 tops0 (SpecSt S.empty [] [])
           let (tops', st') = rewriteTops tops st
            in case spNew st' of
                 [] -> (spErrs st', tops')
-                new ->
-                  let (errs2, tops'') = go (depth + 1) (tops' ++ new) st' {spNew = []}
-                   in (errs2, tops'')
+                new -> let (errs2, tops'') = go (depth + 1) (tops' ++ new) st' {spNew = []} in (errs2, tops'')
 
     rewriteTops :: [STop] -> SpecSt -> ([STop], SpecSt)
     rewriteTops tops st = foldr top ([], st) tops
@@ -234,13 +209,7 @@ specialize sigs structs tops0 = go 0 tops0 (SpecSt S.empty [] [])
                             then (call, st1)
                             else case mkClone f picks nm of
                               Nothing -> (rebuilt, st1) -- no body (HAL?) — leave it
-                              Just clone ->
-                                ( call,
-                                  st1
-                                    { spSeen = S.insert nm (spSeen st1),
-                                      spNew = clone : spNew st1
-                                    }
-                                )
+                              Just clone -> (call, st1 {spSeen = S.insert nm (spSeen st1), spNew = clone : spNew st1})
             _ -> (rebuilt, st1)
 
     structArg (SVar n) | M.member n structs = Just n
@@ -252,11 +221,7 @@ specialize sigs structs tops0 = go 0 tops0 (SpecSt S.empty [] [])
       (_, Nothing) -> []
       (Just row, Just (_, fields)) -> case row \\ fields of
         [] -> []
-        missing ->
-          [ "call of " ++ f ++ " with struct " ++ sn
-              ++ ": does not satisfy " ++ sg
-              ++ " (missing " ++ intercalate ", " missing ++ ")"
-          ]
+        missing -> ["call of " ++ f ++ " with struct " ++ sn ++ ": does not satisfy " ++ sg ++ " (missing " ++ intercalate ", " missing ++ ")"]
 
     -- clone f's body with sig params at `picks` positions dropped and
     -- substituted by their struct
@@ -264,12 +229,7 @@ specialize sigs structs tops0 = go 0 tops0 (SpecSt S.empty [] [])
     mkClone f picks nm = do
       (ps, g, b) <- M.lookup f genBodies
       let pickM = M.fromList picks
-          sub =
-            M.fromList
-              [ (v, sn)
-                | (i, PSig v _) <- zip [0 ..] ps,
-                  Just sn <- [M.lookup i pickM]
-              ]
+          sub = M.fromList [(v, sn) | (i, PSig v _) <- zip [0 ..] ps, Just sn <- [M.lookup i pickM]]
           ps' = [p | (i, p) <- zip [0 ..] ps, not (M.member i pickM)]
           rep = substStruct sub
       pure (TBind nm ps' (fmap rep g) (rep b))

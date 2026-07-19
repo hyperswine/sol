@@ -19,12 +19,12 @@ import Data.IORef
 import Data.List (isPrefixOf)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
+import GHC.IO.Encoding (setLocaleEncoding, utf8)
+import JIT (JitCtx, initJIT)
 import Lang
 import Mod (resolveModule)
 import Struct (structPass)
-import JIT (JitCtx, initJIT)
 import System.Environment (getArgs, lookupEnv)
-import GHC.IO.Encoding (setLocaleEncoding, utf8)
 import System.Exit (exitFailure)
 import System.FilePath (dropExtension, takeDirectory)
 import Text.Megaparsec (errorBundlePretty, parse)
@@ -72,16 +72,49 @@ prelude =
 halArities :: M.Map Name Int
 halArities =
   M.fromList
-    [ ("print", 1), ("str", 1), ("strcat", 2), ("String.len", 1), ("strlen", 1),
-      ("error", 1), ("parseInt", 1), ("charAt", 2), ("chr", 1), ("!", 2), ("sleepMs", 1), ("fuelPreempts", 1),
-      ("open", 1), ("readAll", 1), ("writeAll", 2), ("close", 1),
-      ("rm", 1), ("rmdir", 1), ("mkdirp", 1), ("ls", 1), ("exists", 1),
-      ("isDir", 1), ("stat", 1), ("sh", 1), ("shq", 1),
-      ("map", 2), ("filter", 2), ("foldl", 3),
-      ("Vec.new", 1), ("Vec.push", 2), ("Vec.len", 1), ("Vec.get", 2),
-      ("Vec.set", 3), ("Vec.map", 2), ("Vec.filter", 2), ("Vec.fold", 3),
-      ("Vec.toList", 1), ("Vec.fromList", 1), ("Vec.free", 1),
-      ("use", 1), ("run", 2), ("input", 1), ("View.serve", 5)
+    [ ("print", 1),
+      ("str", 1),
+      ("strcat", 2),
+      ("String.len", 1),
+      ("strlen", 1),
+      ("error", 1),
+      ("parseInt", 1),
+      ("charAt", 2),
+      ("chr", 1),
+      ("!", 2),
+      ("sleepMs", 1),
+      ("fuelPreempts", 1),
+      ("open", 1),
+      ("readAll", 1),
+      ("writeAll", 2),
+      ("close", 1),
+      ("rm", 1),
+      ("rmdir", 1),
+      ("mkdirp", 1),
+      ("ls", 1),
+      ("exists", 1),
+      ("isDir", 1),
+      ("stat", 1),
+      ("sh", 1),
+      ("shq", 1),
+      ("map", 2),
+      ("filter", 2),
+      ("foldl", 3),
+      ("Vec.new", 1),
+      ("Vec.push", 2),
+      ("Vec.len", 1),
+      ("Vec.get", 2),
+      ("Vec.set", 3),
+      ("Vec.map", 2),
+      ("Vec.filter", 2),
+      ("Vec.fold", 3),
+      ("Vec.toList", 1),
+      ("Vec.fromList", 1),
+      ("Vec.free", 1),
+      ("use", 1),
+      ("run", 2),
+      ("input", 1),
+      ("View.serve", 5)
     ]
 
 maxRetries :: Int
