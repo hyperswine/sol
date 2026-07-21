@@ -32,6 +32,7 @@ cartTotal cart = List.fold addPrice 0 cart.
 
 init tok = {user = Persistent "", pendu = "", pendp = "", note = "", cart = [], revenue = ""}.
 
+# technically msg should be a sum type rather than a string, but this is simpler for now. Its probably fine because constant strings are interned and so the comparisons are fast. But if we had a lot of messages, it would be better to use a sum type.
 update msg model =
   case msg of
     ("login", v) -> doLogin v model
@@ -53,6 +54,12 @@ update msg model =
               Print "sale: {cartTotal model.cart} by {unwrapU model}"])
   | _ -> (model, None).
 
+# ui.el and ui.form are helpers for generating HTML elements and forms. ui.onClick is a helper for generating clickable elements that send messages to the update function.
+# they could probably just be their own fuctions like div/2 or form/3, but this is a bit more convenient for now. The ui module could be expanded to include more helpers for generating HTML elements and forms.
+# we are using ui.Style.* which is better than hardcoding style strings
+
+# ui.onClick is its own element rather than some callback or something
+# with it we can just directly generate the right html and js like a button with an onclick handler that sends a message to the update function
 
 loginView model =
   ui.el "div" [ui.Style.card, ui.Style.flex, ui.Style.flexcol, ui.Style.gap3] [

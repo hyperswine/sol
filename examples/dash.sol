@@ -2,24 +2,40 @@
 # push to the browser (no client events). Total sign-ins persist in KV;
 # the live series is runtime state, abandoned on restart by design.
 
+# ideally should use syntax X.y like Sig.field rather than xY so pI could be Parse.intToStr
+# unwrapU would be Unwrap.persistentUser
+
 base = use "../lib/base".
 ui = use "../lib/ui".
 
 pI s = case s == "" of True -> 0 | False -> Str.parse s.
+# infers as Persistent String.
 unwrapU model = case model.user of Persistent u -> u.
 
 doLogin v model = (u, p) = base.splitFirst v; ({model | pendu = u, pendp = p}, Get "user:{u}" "auth").
-doAuth stored model =
-  case stored == "" of
-    True -> ({model | note = "no such user"}, None)
-  | False -> case stored == model.pendp of
-      True -> (model, Msg "setuser" model.pendu)
-    | False -> ({model | note = "wrong password"}, None).
+
+
+# doAuth stored model =
+#   case stored == "" of
+#     True -> ({model | note = "no such user"}, None)
+#   | False -> case stored == model.pendp of
+#       True -> (model, Msg "setuser" model.pendu)
+#     | False -> ({model | note = "wrong password"}, None).
+
+# check if user exists and password matches; if so, set as current user
+doAuth stored model | stored == "" = ({model | note = "no such user"}, None).
+doAuth stored model | stored == model.pendp = (model, Msg "setuser" model.pendu).
+doAuth stored model | stored != model.pendp = ({model | note = "wrong password"}, None).
+
 doReg v model = (u, p) = base.splitFirst v; ({model | pendu = u, pendp = p}, Get "user:{u}" "regchk").
-doRegchk stored model =
-  case stored == "" of
-    True -> (model, Batch [Put "user:{model.pendu}" model.pendp, Msg "setuser" model.pendu])
-  | False -> ({model | note = "user already exists"}, None).
+# doRegchk stored model =
+#   case stored == "" of
+#     True -> (model, Batch [Put "user:{model.pendu}" model.pendp, Msg "setuser" model.pendu])
+#   | False -> ({model | note = "user already exists"}, None).
+
+# check if user exists; if not, create it and set as current user. If exists, return error note.
+doRegchk stored model | stored == "" = (model, Batch [Put "user:{model.pendu}" model.pendp, Msg "setuser" model.pendu]).
+doRegchk stored model | stored != "" = ({model | note = "user already exists"}, None).
 
 takeN n xs | n == 0 = [].
 takeN n xs | xs == [] = [].
@@ -27,6 +43,7 @@ takeN n xs = case xs of x :: r -> x :: takeN (n - 1) r.
 
 init tok = {user = Persistent "", pendu = "", pendp = "", note = "", series = [], reqs = 0, logins = ""}.
 
+# technically could match directly on the string in the clause head
 update msg model =
   case msg of
     ("login", v) -> doLogin v model
