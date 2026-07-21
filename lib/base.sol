@@ -3,6 +3,7 @@
 # here was previously either hardcoded in the Haskell prelude string or
 # copy-pasted across apps.
 
+# parse an integer from a string, returning 0 on empty string
 pI s = case s == "" of True -> 0 | False -> Str.parse s.
 and2 a b = case a of True -> b | False -> False.
 or2 a b = case a of True -> True | False -> b.

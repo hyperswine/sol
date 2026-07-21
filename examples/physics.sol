@@ -11,6 +11,10 @@
 # R = 2·vx·vy/g to O(dt); (2) JIT and interpreter agree exactly (run with
 # SOL_JIT=0 and diff).
 
+# IDEALLY it should just use conventional math operators and the Numeric datatype
+# and infer the fixed point float type, but the current fix.fmul/fdiv/fsqrt are hand-optimized for speed
+# it does still work
+
 fix = use "../lib/fix".
 
 dt = 655.        # 0.01 s

@@ -14,6 +14,12 @@ logic = use "logic".
 
 Opt2 = Type (Nope2 | Got2 x).
 
+# Parser could be extracted to its own lib
+# could in theory just use a small parser combinator with around 2-3 basic combinators
+# then build all the other combinators on top of that
+# including a "tokenizer"
+# so parser could be a library that is used by the sol compiler and also by sol programs
+
 # raw terms before interning/numbering
 R = Type (RA x | RV x | RI x | RC x y).
 

@@ -98,13 +98,13 @@ expandStructs sigs tops = (errs, concatMap one tops)
     one = \case
       TStruct n _ fs ->
         [fieldBind (qual n f) e | (f, e) <- fs]
-          ++ [TBind n [] Nothing (SRec [(f, SVar (qual n f)) | (f, _) <- fs])]
+          ++ [TBind n [] [] (SRec [(f, SVar (qual n f)) | (f, _) <- fs])]
       t -> [t]
     qual n f = n ++ "." ++ f
     -- a lambda field becomes a real n-ary global (direct CALLs, JITtable);
     -- anything else is a zero-arity CAF
-    fieldBind g (SLam ps b) = TBind g (map PVar ps) Nothing b
-    fieldBind g e = TBind g [] Nothing e
+    fieldBind g (SLam ps b) = TBind g (map PVar ps) [] b
+    fieldBind g e = TBind g [] [] e
 
 -- ---- specialization (compile-time search + monomorphization) ----------------
 
@@ -164,7 +164,7 @@ specialize sigs structs tops0 = go 0 tops0 (SpecSt S.empty [] [])
         top t (acc, s) = let (t', s') = rwTop t s in (t' : acc, s')
         rwTop t s = case t of
           TBind n ps g b ->
-            let (g', s1) = maybe (Nothing, s) (\e -> let (e', sx) = rwE e s in (Just e', sx)) g
+            let (g', s1) = foldr (\gd (acc, sx) -> case gd of GBool e -> let (e', sy) = rwE e sx in (GBool e' : acc, sy); GPat p e -> let (e', sy) = rwE e sx in (GPat p e' : acc, sy)) ([], s) g
                 (b', s2) = rwE b s1
              in (TBind n ps g' b', s2)
           TEval e -> let (e', s') = rwE e s in (TEval e', s')
@@ -277,7 +277,7 @@ specialize sigs structs tops0 = go 0 tops0 (SpecSt S.empty [] [])
               ]
           ps' = [p | (i, p) <- zip [0 ..] ps, not (M.member i pickM)]
           rep = substStruct sub
-      pure (TBind nm ps' (fmap rep g) (rep b))
+      pure (TBind nm ps' (map (mapGuardE rep) g) (rep b))
 
 spineS :: SExpr -> (SExpr, [SExpr])
 spineS = go []
@@ -290,7 +290,7 @@ spineS = go []
 erasePSig :: [STop] -> [STop]
 erasePSig = map top
   where
-    top (TBind n ps g b) = TBind n (map ep ps) g b
+    top (TBind n ps g b) = TBind n (map ep ps) [mapGuardP ep gd | gd <- g] b
     top (TSigDef _ _) = TSkip -- consumed by the tables; nothing downstream
     top t = t
     ep (PSig n _) = PVar n

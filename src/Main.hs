@@ -281,7 +281,7 @@ numberEvals tops = (map fst numbered, [n | (_, Just n) <- numbered])
     go _ [] = []
     go i (TEval e : rest) =
       let n = "top__" ++ show i
-       in (TBind n [] Nothing e, Just n) : go (i + 1) rest
+       in (TBind n [] [] e, Just n) : go (i + 1) rest
     go i (t : rest) = (t, Nothing) : go i rest
 
 parseOrDie :: String -> String -> IO [STop]
@@ -303,7 +303,7 @@ parseOrDie name src = case parse program name src of
 expandUses :: Int -> String -> IORef (M.Map String String) -> FilePath -> [STop] -> IO [STop]
 expandUses 0 _ _ _ _ = putStrLn "[sol] use: module nesting too deep" >> exitFailure >> pure []
 expandUses depth prefix seenRef baseDir tops = do
-  let aliases = [(mn, spec) | TBind mn [] Nothing (SApp (SVar "use") (SStrI [SegStr spec])) <- tops]
+  let aliases = [(mn, spec) | TBind mn [] [] (SApp (SVar "use") (SStrI [SegStr spec])) <- tops]
   pairs <- forM aliases $ \(mn, spec) -> do
     r <- resolveModule baseDir spec
     case r of

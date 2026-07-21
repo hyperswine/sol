@@ -2,9 +2,9 @@
 # web (view vocabulary), auth (sign-in pattern). Compare with todo.sol:
 # the app is now ONLY its own logic.
 
-base = use "../lib/base#4cb470f20dc4cca4".
-ui = use "../lib/ui#937f83a2a6bbb0da".
-auth = use "../lib/auth#71e071e95202e053".
+base = use "../lib/base#7e05902ed50cd192".
+ui = use "../lib/ui#24f48582c24bf402".
+auth = use "../lib/auth#4fc46ccfbd5e1bc2".
 
 # aliases for the hot paths (qualified access also works everywhere)
 

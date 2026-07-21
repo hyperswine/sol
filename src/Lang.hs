@@ -69,8 +69,28 @@ data SPat
   | PSig Name Name -- (s : Functor) — a param constrained by a named sig
   deriving (Show)
 
+-- one component of a clause guard: `| e1, p <- e2, e3 = body`
+data SGuard
+  = GBool SExpr -- boolean condition
+  | GPat SPat SExpr -- pattern-match binding `pat <- expr`
+  deriving (Show)
+
+guardExprs :: [SGuard] -> [SExpr]
+guardExprs gs = [e | g <- gs, e <- case g of GBool e' -> [e']; GPat _ e' -> [e']]
+
+guardPats :: [SGuard] -> [SPat]
+guardPats gs = [p | GPat p _ <- gs]
+
+mapGuardE :: (SExpr -> SExpr) -> SGuard -> SGuard
+mapGuardE f (GBool e) = GBool (f e)
+mapGuardE f (GPat p e) = GPat p (f e)
+
+mapGuardP :: (SPat -> SPat) -> SGuard -> SGuard
+mapGuardP _ (GBool e) = GBool e
+mapGuardP f (GPat p e) = GPat (f p) e
+
 data STop
-  = TBind Name [SPat] (Maybe SExpr) SExpr
+  = TBind Name [SPat] [SGuard] SExpr
   | TType Name Bool [Name] [(Name, [Ty])]
   | TShape Name [(Name, Ty)]
   | TSig Name ([Ty], Ty)
@@ -385,12 +405,16 @@ patAtom =
     [ PWild <$ symbol "_",
       PInt <$> integer,
       strPat,
+      listPat,
       PRec <$> braces (lowerName `sepBy1` symbol ","),
       parens patInParens,
       flip PCon [] <$> upperName,
       PVar <$> lowerName
     ]
   where
+    listPat = do
+      ps <- between (symbol "[") (symbol "]") (pattern' `sepBy` symbol ",")
+      pure (foldr (\p acc -> PCon "Cons" [p, acc]) (PCon "Nil" []) ps)
     strPat = lexeme $ do
       _ <- char '"'
       s <- manyTill (satisfy (/= '"')) (char '"')
@@ -579,11 +603,17 @@ binding :: P STop
 binding = do
   n <- pName
   pats <- many patAtom
-  g <- optional (pipeSep *> expr)
+  g <- option [] (pipeSep *> guardItem `sepBy1` symbol ",")
   eqSign
   body <- block
   dotTerm
   pure (TBind n pats g body)
+
+-- `pat <- expr` (pattern-match binding) or a boolean condition
+guardItem :: P SGuard
+guardItem =
+  try (GPat <$> pattern' <* symbol "<-" <*> expr)
+    <|> (GBool <$> expr)
 
 block :: P SExpr
 block = do
@@ -660,7 +690,8 @@ collectShapes tops = M.fromList (zip allShapes [100 ..])
     topShapes (TShape _ fs) = [sort (map fst fs)]
     topShapes (TBind _ ps g b) =
       concatMap patShapes ps
-        ++ maybe [] exprShapes g
+        ++ concatMap exprShapes (guardExprs g)
+        ++ concatMap patShapes (guardPats g)
         ++ exprShapes b
     topShapes _ = []
     patShapes = \case
@@ -870,7 +901,7 @@ compileTop tops = do
        in (n, (ps, g, b) : [(ps', g', b') | TBind _ ps' g' b' <- same]) : groupClauses others
     groupClauses (_ : rest) = groupClauses rest
 
-compileGroup :: (Name, [([SPat], Maybe SExpr, SExpr)]) -> D (Name, ([Name], Core))
+compileGroup :: (Name, [([SPat], [SGuard], SExpr)]) -> D (Name, ([Name], Core))
 compileGroup (n, clauses@((ps0, _, _) : _)) = do
   let arity = length ps0
   args <- mapM (\i -> fresh ("a" ++ show i)) [1 .. arity]
@@ -880,10 +911,18 @@ compileGroup (n, clauses@((ps0, _, _) : _)) = do
     goClauses _ [] = pure (CErr ("no matching clause for " ++ n))
     goClauses args ((ps, g, b) : rest) = do
       nxt <- goClauses args rest
-      b' <- dExpr b
-      inner <- case g of
-        Nothing -> pure b'
-        Just ge -> do ge' <- dExpr ge; pure (CIf ge' b' nxt)
+      let goGuards [] = dExpr b
+          goGuards (GBool ge : gs) = do
+            ge' <- dExpr ge
+            k <- goGuards gs
+            pure (CIf ge' k nxt)
+          goGuards (GPat p e : gs) = do
+            e' <- dExpr e
+            k <- goGuards gs
+            gv <- fresh "g"
+            m <- matchPat (CVar gv) p k nxt
+            pure (CLet gv e' m)
+      inner <- goGuards g
       matchMany (zip (map CVar args) ps) inner nxt
     matchMany [] ok _ = pure ok
     matchMany ((s, p) : rest) ok fail' = do
@@ -1182,10 +1221,20 @@ lcheck li tops = concatMap checkGroup groups
           binds = concat (zipWith (bindPat li) pats paramShapes)
           env = M.fromList binds
           linear = [v | (v, s) <- binds, isLin s]
-          (ge, gc) = case g of
-            Nothing -> ([], M.empty)
-            Just gx -> let (e', c', _) = lin' env gx in (e', fromMaybe M.empty c')
-          (be, bc, _) = lin' env body
+          (genv, ge, gc) =
+            foldl'
+              ( \(en, errs, cnt) gd -> case gd of
+                  GBool gx ->
+                    let (e', c', _) = lin' en gx
+                     in (en, errs ++ e', M.unionWith (+) cnt (fromMaybe M.empty c'))
+                  GPat p gx ->
+                    let (e', c', _) = lin' en gx
+                        en' = M.union (M.fromList (bindPat li p LU)) en
+                     in (en', errs ++ e', M.unionWith (+) cnt (fromMaybe M.empty c'))
+              )
+              (env, [], M.empty)
+              g
+          (be, bc, _) = lin' genv body
           guardErr = ["in " ++ n ++ ": guard uses linear variable(s) " ++ show (M.keys (M.filter (> 0) gc)) ++ " (guards may re-evaluate on fallthrough)" | not (M.null (M.filter (> 0) gc))]
           useErrs = case bc of
             Nothing -> []
@@ -1386,6 +1435,23 @@ sFree = nub . go
 -- module alias and not locally bound.
 --------------------------------------------------------------------------------
 
+-- rename guard components left-to-right: each pattern's variables shadow
+-- (become binders) for later guard expressions and the clause body
+renGuards ::
+  (S.Set Name -> SExpr -> SExpr) ->
+  (SPat -> SPat) ->
+  S.Set Name ->
+  [SGuard] ->
+  (S.Set Name, [SGuard])
+renGuards re rp = go
+  where
+    go bs [] = (bs, [])
+    go bs (GBool e : gs) = let (bs', gs') = go bs gs in (bs', GBool (re bs e) : gs')
+    go bs (GPat p e : gs) =
+      let bs2 = S.union bs (S.fromList (patVars p))
+          (bs', gs') = go bs2 gs
+       in (bs', GPat (rp p) (re bs e) : gs')
+
 patVars :: SPat -> [Name]
 patVars = \case
   PVar n -> [n]
@@ -1447,7 +1513,8 @@ renameTops rn tops0 = map top tops0
     top = \case
       TBind n ps g b ->
         let bs = S.fromList (concatMap patVars ps)
-         in TBind (look n) (map rp ps) (fmap (re bs) g) (re bs b)
+            (bs', g') = renGuards re rp bs g
+         in TBind (look n) (map rp ps) g' (re bs' b)
       TSig n (ps, r) -> TSig (look n) (map rt ps, rt r)
       TType n l ps cs -> TType (look n) l ps [(look c, map rt tys) | (c, tys) <- cs]
       TEval e -> TEval (re S.empty e)
@@ -1489,7 +1556,8 @@ qualifyUses aliases = map top
     top = \case
       TBind n ps g b ->
         let bs = S.fromList (concatMap patVars ps)
-         in TBind n ps (fmap (re bs) g) (re bs b)
+            (bs', g') = renGuards re id bs g
+         in TBind n ps g' (re bs' b)
       TEval e -> TEval (re S.empty e)
       TConAlias t tgt -> TConAlias t (retgt tgt)
       other -> other

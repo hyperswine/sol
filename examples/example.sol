@@ -14,13 +14,10 @@ classify x | x == 0 = "zero".
 classify x | x < 0 = "negative".
 classify _ = "positive".
 
-# let-sugar with ; and nested (parenthesized) case
-g2 x =
-  y = case x of
-    MyInt i -> (case i of 0 -> 1 | _ -> 2)
-  | MyString s l -> 3;
-  z = 1;
-  y + z.
+# multi-clause + pattern params instead of nested case
+g2 (MyInt 0) = 2.
+g2 (MyInt _) = 3.
+g2 (MyString _ _) = 4.
 
 # row-polymorphic record pattern {a} + guard; works on ANY shape with field a
 myfunc : {a : String | r} -> String -> Bool.
@@ -46,12 +43,21 @@ pipeline k x =
 chained x =
   Ok x |>? safe_div 100 |>? fn v -> Ok (v + 1).
 
+# pattern-match binding in guards: `pat <- expr` binds for later guards + body
+describe r | Ok v <- chained r, v > 20 = "big {v}".
+describe r | Ok v <- chained r = "ok {v}".
+describe _ = "failed".
+
 b = "mystring".
 mystring = "g2 = {g2 (MyString b (String.len b))}, third = {[10, 20, 30] ! 3}".
 
-> print mystring.
+# `$` = low-precedence apply: `print $ e` == `print (e)`
+> print $ mystring + " " + describe 4.
 
 check = case myfunc {a = "x", c = 9} "x" of True -> "matched" | False -> "no".
+
+# `$` only reaches to end-of-expression, so inside a `>>` chain keep parens;
+# a whole statement can take `$` (see the top-level print above).
 
 main =
   print mystring >>

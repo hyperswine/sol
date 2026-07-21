@@ -7,6 +7,10 @@
 # mutating tool calls (shq) queue for commit. If a concurrent process
 # changes a file we read, we abort and re-run — deferred effects never fire.
 
+# mkdirp = create a dir and all its parents if needed, atomically. If the dir already exists, do nothing.
+# writePath = write a file atomically, creating parent dirs if needed. If the file already exists, overwrite it.
+# readPath = read a file into a string. If the file doesn't exist, abort.
+
 base = use "../lib/base".
 
 # ---- a mini "project scaffolder": create a dir tree + files atomically ----
@@ -28,21 +32,18 @@ addLines dir acc name =
   case isDir path of
     True -> acc
   | False -> acc + countLines (readPath path).
-countLines s = base.listLen (base.splitCh 10 s).
+countLines s = base.splitCh 10 s |> base.listLen.
 
 # ---- prune: remove all files matching a suffix, transactionally ----
 pruneSuffix dir suf =
-  names = ls dir;
-  hits = List.filter (endsWith suf) names;
+  hits = ls dir |> List.filter (endsWith suf);
   u = pruneList dir hits;
   print "pruned {base.listLen hits} '{suf}' file(s) from {dir}".
 # (endsWith already excludes dirs here since our .bak names are files)
-pruneList dir names | names == [] = 0.
-pruneList dir names = case names of n :: r -> plStep dir n r.
-plStep dir n r = u = rm "{dir}/{n}"; pruneList dir r.
-endsWith suf s =
-  ls2 = Str.len s; lf = Str.len suf;
-  case ls2 < lf of True -> False | False -> base.substr s (ls2 - lf + 1) ls2 == suf.
+pruneList dir [] = 0.
+pruneList dir (n :: r) = u = rm "{dir}/{n}"; pruneList dir r.
+endsWith suf s | Str.len s < Str.len suf = False.
+endsWith suf s = base.substr s (Str.len s - Str.len suf + 1) (Str.len s) == suf.
 
 > scaffold "/tmp/proj".
 > lineCountAll "/tmp/proj/src".

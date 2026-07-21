@@ -16,6 +16,8 @@
 #   Strips are encoded as ints: key = row*2 + side (side: 0=left 1=right),
 #   so "two rows down, same side" is just key+4.
 
+# Ideally should use more |> and |>? and less explicit let-binding
+
 base = use "../lib/base".
 
 Opt = Type (Nope | Got x).
@@ -24,26 +26,31 @@ Opt = Type (Nope | Got x).
 append xs ys | xs == [] = ys.
 append xs ys = case xs of x :: r -> x :: append r ys.
 
-member x xs | xs == [] = False.
-member x xs = case xs of y :: r -> (case x == y of True -> True | False -> member x r).
+member _ [] = False.
+member x (y :: _) | x == y = True.
+member x (_ :: r) = member x r.
 
-lookupA k ps | ps == [] = Nope.
-lookupA k ps = case ps of p :: r -> lookStep k p r.
-lookStep k p r = (k2, v) = p; case k2 == k of True -> Got v | False -> lookupA k r.
+lookupA _ [] = Nope.
+lookupA k ((k2, v) :: _) | k2 == k = Got v.
+lookupA k (_ :: r) = lookupA k r.
 
 rev2 acc xs | xs == [] = acc.
 rev2 acc xs = case xs of x :: r -> rev2 (x :: acc) r.
 reverse xs = rev2 [] xs.
 
-pad3 s = case Str.len s >= 3 of True -> s | False -> pad3 " {s}".
-pad4 s = case Str.len s >= 4 of True -> s | False -> pad4 " {s}".
+pad3 s | Str.len s >= 3 = s.
+pad3 s = pad3 " {s}".
+pad4 s | Str.len s >= 4 = s.
+pad4 s = pad4 " {s}".
 
-iabs n = case n < 0 of True -> 0 - n | False -> n.
+iabs n | n < 0 = 0 - n.
+iabs n = n.
 
 # ---------- tokenizing ----------
 nonEmpty s = s != "".
-words ln = List.filter nonEmpty (base.splitCh 32 ln).
-upC c = case base.and2 (c >= 97) (c <= 122) of True -> c - 32 | False -> c.
+words ln = base.splitCh 32 ln |> List.filter nonEmpty.
+upC c | c >= 97, c <= 122 = c - 32.
+upC c = c.
 
 # ---------- parsing ----------
 # component: {kind (char code), na, nb, nm, val}
@@ -83,7 +90,8 @@ pwStep2 c r = case base.and2 (isSource c) (c.nb == "0") of
 
 netsOf comps | comps == [] = [].
 netsOf comps = case comps of c :: r -> addNet c.na (addNet c.nb (netsOf r)).
-addNet n ns = case member n ns of True -> ns | False -> n :: ns.
+addNet n ns | member n ns = ns.
+addNet n ns = n :: ns.
 
 netTag net pwrs =
   case net == "0" of
@@ -105,13 +113,14 @@ holeLabel k col = "{holeLetter (sSide k) col}{sRow k}".
 #       places : [(nm, kind, sA, cA, cB)] placements (pinB strip = sA + 4)}
 st0 = {holes = [], owners = [], netstr = [], places = []}.
 
-usedCols k holes | holes == [] = [].
-usedCols k holes = case holes of h :: r -> usedStep k h r.
-usedStep k h r = (k2, c) = h; case k2 == k of True -> c :: usedCols k r | False -> usedCols k r.
+usedCols _ [] = [].
+usedCols k ((k2, c) :: r) | k2 == k = c :: usedCols k r.
+usedCols k (_ :: r) = usedCols k r.
 
 freeCol k holes = firstNot 1 (usedCols k holes).
 firstNot c used | c > 5 = 0.
-firstNot c used = case member c used of True -> firstNot (c + 1) used | False -> c.
+firstNot c used | member c used = firstNot (c + 1) used.
+firstNot c used = c.
 
 stripOK k net owners =
   case lookupA k owners of Nope -> True | Got n -> n == net.
@@ -162,9 +171,9 @@ track net k netstr =
     True -> netstr
   | False -> (net, append ss [k]) :: dropKey net netstr.
 
-dropKey k ps | ps == [] = [].
-dropKey k ps = case ps of p :: r -> dropStep k p r.
-dropStep k p r = (k2, v) = p; case k2 == k of True -> dropKey k r | False -> p :: dropKey k r.
+dropKey _ [] = [].
+dropKey k ((k2, _) :: r) | k2 == k = dropKey k r.
+dropKey k (p :: r) = p :: dropKey k r.
 
 placeOne c st =
   sA = bestCand c.na c.nb (allKeys 1) 0 (0 - 999999) st;
@@ -307,7 +316,8 @@ stripsStr ss = case ss of
   s :: r -> (case r == [] of
     True -> "row {sRow s} {sideName s}"
   | False -> "row {sRow s} {sideName s}, {stripsStr r}").
-sideName k = case sSide k == 0 of True -> "L" | False -> "R".
+sideName k | sSide k == 0 = "L".
+sideName _ = "R".
 
 printNets nets pwrs netstr | nets == [] = 0.
 printNets nets pwrs netstr = case nets of n :: r -> pnStep n r pwrs netstr.

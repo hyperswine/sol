@@ -708,7 +708,8 @@ inferTops sigs structs tops =
             ]
           refs (ps, g, b) =
             let bound = S.fromList (concatMap patVars ps)
-             in topRefs2 topSet bound b ++ maybe [] (topRefs2 topSet bound) g
+                bound' = S.union bound (S.fromList (concatMap patVars (guardPats g)))
+             in topRefs2 topSet bound' b ++ concatMap (topRefs2 topSet bound') (guardExprs g)
           sccs = stronglyConnComp nodes
       (env, rwBinds) <-
         foldM
@@ -737,7 +738,7 @@ inferTops sigs structs tops =
               [] -> ((evs, bnds), t)
             TBind n _ _ _ -> case M.lookup n bnds of
               Just ((ps, g, b) : more) ->
-                ((evs, M.insert n more bnds), TBind n ps (fmap apE g) (apE b))
+                ((evs, M.insert n more bnds), TBind n ps (map (mapGuardE apE) g) (apE b))
               _ -> ((evs, bnds), t)
             _ -> ((evs, bnds), t)
           (_, tops') = foldl' (\(st', acc) t -> let (st2, t') = rebuild st' t in (st2, acc ++ [t'])) ((rwEvals, fmap reverse rwMap), []) tops
@@ -745,7 +746,7 @@ inferTops sigs structs tops =
     flat (AcyclicSCC n) = [n]
     flat (CyclicSCC ns) = ns
 
-    inferSCC :: TEnv -> TEnv -> [Name] -> I (TEnv, [(Name, [SPat], Maybe SExpr, SExpr)])
+    inferSCC :: TEnv -> TEnv -> [Name] -> I (TEnv, [(Name, [SPat], [SGuard], SExpr)])
     inferSCC cons env ns = do
       -- monomorphic recursion within the SCC
       mvs <- mapM (const freshT) ns
@@ -755,11 +756,22 @@ inferTops sigs structs tops =
           -- params: PSig gets its sig's record type; others infer
           (ptys, penvs) <- unzip <$> mapM (inferParam cons) ps
           let ctx = ICtx (M.union (M.unions penvs) recEnv) cons sigs
-          g' <- forM g $ \ge -> do
-            (tg, ge') <- inferE ctx ge
-            unify ("guard of " ++ n) tg tBool
-            pure ge'
-          (tb, b') <- inferE ctx b
+          (ctx2, g') <-
+            foldM
+              ( \(cx, acc) gd -> case gd of
+                  GBool ge -> do
+                    (tg, ge') <- inferE cx ge
+                    unify ("guard of " ++ n) tg tBool
+                    pure (cx, acc ++ [GBool ge'])
+                  GPat p ge -> do
+                    (tg, ge') <- inferE cx ge
+                    (tp, benv) <- inferPat (icCons cx) p
+                    unify ("pattern guard of " ++ n) tp tg
+                    pure (extend benv cx, acc ++ [GPat p ge'])
+              )
+              (ctx, [])
+              g
+          (tb, b') <- inferE ctx2 b
           declaredOrRec n mv (foldr TFn tb ptys)
           pure (n, ps, g', b')
       -- numeric defaulting BEFORE generalization: an op site still at an

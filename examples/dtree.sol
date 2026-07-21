@@ -46,7 +46,8 @@ cnt feat th acc p =
 
 posCnt acc p = acc + (case p.y > 0 of True -> 1 | False -> 0).
 
-imin a b = case a < b of True -> a | False -> b.
+imin a b | a < b = a.
+imin _ b = b.
 
 # misclassification score of a split: each side predicts its majority
 scoreOf c =
@@ -77,7 +78,8 @@ allCands = cands1 1 (grid (0 - 6)) `append` cands1 2 (grid (0 - 6)).
 append xs ys | xs == [] = ys.
 append xs ys = case xs of x :: r -> x :: append r ys.
 
-pick feat p = case feat == 1 of True -> p.x1 | False -> p.x2.
+pick 1 p = p.x1.
+pick _ p = p.x2.
 
 part feat th xs ls rs | xs == [] = (ls, rs).
 part feat th xs ls rs = case xs of
@@ -85,8 +87,8 @@ part feat th xs ls rs = case xs of
     True -> part feat th r (p :: ls) rs
   | False -> part feat th r ls (p :: rs)).
 
-buildVec xs v | xs == [] = v.
-buildVec xs v = case xs of p :: r -> buildVec r (Vec.push p v).
+buildVec [] v = v.
+buildVec (p :: r) v = buildVec r (Vec.push p v).
 
 listLen xs = List.fold len1 0 xs.
 len1 a x = a + 1.
@@ -118,13 +120,13 @@ splitNode depth n v =
   r = build (depth - 1) (buildVec rs (Vec.new Unit));
   Node bf bt l r.
 
-predict t p = case t of
-  Leaf c -> c
-| Node f th l r -> (case pick f p < th of True -> predict l p | False -> predict r p).
+predict (Leaf c) _ = c.
+predict (Node f th l _) p | pick f p < th = predict l p.
+predict (Node _ _ _ r) p = predict r p.
 
-accGo t xs k | xs == [] = k.
-accGo t xs k = case xs of
-  p :: r -> accGo t r (k + (case fix.fmul (predict t p) p.y > 0 of True -> 1 | False -> 0)).
+accGo _ [] k = k.
+accGo t (p :: r) k | fix.fmul (predict t p) p.y > 0 = accGo t r (k + 1).
+accGo t (_ :: r) k = accGo t r k.
 
 showT t = case t of
   Leaf c -> "Leaf({fix.toMilli c})"

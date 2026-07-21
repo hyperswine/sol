@@ -114,7 +114,7 @@ collectSeeds tops = M.mapWithKey trim (foldl' top M.empty tops)
     arities = M.fromList [(n, length ps) | TBind n ps _ _ <- tops]
     trim n ivs = take (M.findWithDefault 0 n arities) ivs
     top acc = \case
-      TBind _ _ g b -> maybe id goE g (goE b acc)
+      TBind _ _ g b -> foldr goE (goE b acc) (guardExprs g)
       TEval e -> goE e acc
       _ -> acc
     goE e acc0 = case spine e of
@@ -148,7 +148,7 @@ collectSeeds tops = M.mapWithKey trim (foldl' top M.empty tops)
 -- pass 2: per function, interpret with seeded params; classify prim sites
 analyze :: [STop] -> [(Name, WStats)]
 analyze tops =
-  [ (n, snd (goE env0 b) <> maybe mempty (snd . goE env0) g)
+  [ (n, snd (goE env0 b) <> foldMap (snd . goE env0) (guardExprs g))
     | TBind n ps g b <- tops,
       let seeds = M.findWithDefault (repeat TopIv) n seedTbl
           env0 = M.fromList (zip (concatMap patVars ps) (seeds ++ repeat TopIv))

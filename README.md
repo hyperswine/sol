@@ -79,6 +79,13 @@ terminator, same rule as `dotTerm`).
 The body is a full block, so `> h = open @/x; ...; close h3.` is one atomic
 script step. A zero-arity `main`, if present, runs after the `>` statements.
 
+`$` is Haskell-style low-precedence application (`print $ a + b`); it
+parses to the same AST as parens, so module hashes are unaffected. Clause
+guards accept comma-separated components including pattern-match bindings
+(`f y | Just x <- y, x < 0 = x + 1.`) with fallthrough to the next clause
+on match failure; list patterns (`[]`, `[a, b]`, `(x :: r)`) work in
+parameter position. See STYLE.md for the conventions.
+
 ## gen_view: MVU web apps (View.serve)
 
     > View.serve 8080 init update view [(1000, "tick")].

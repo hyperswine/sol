@@ -6,9 +6,9 @@
 
 # ---- operator dispatch on concrete types ------------------------------------
 
-> print (1 + 2).
-> print ("con" + "cat").
-> print (str ([1,2] + [3,4])).
+> print $ 1 + 2.
+> print $ "con" + "cat".
+> print $ str ([1,2] + [3,4]).
 
 # ---- <structure>.<symbol> utilities -----------------------------------------
 
