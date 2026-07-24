@@ -910,7 +910,23 @@ compileGroup (n, clauses@((ps0, _, _) : _)) = do
   where
     goClauses _ [] = pure (CErr ("no matching clause for " ++ n))
     goClauses args ((ps, g, b) : rest) = do
-      nxt <- goClauses args rest
+      nxtBig <- goClauses args rest
+      -- JOIN POINT: the fallthrough continuation is spliced into every
+      -- failure site of this clause's pattern/guard match (tuple tag
+      -- checks, literal subpatterns, each guard component). Inlining it
+      -- verbatim doubles the tree per clause — exponential in clause
+      -- count (22 idiomatic clauses OOM'd the compiler). Bind it once as
+      -- a zero-use-arg lambda instead; lambda lifting turns it into an
+      -- ordinary supercombinator capturing the args, and each failure
+      -- site becomes a call. Last clause keeps the tiny CErr inline.
+      (nxt, wrap) <- case rest of
+        [] -> pure (nxtBig, pure)
+        _ -> do
+          j <- fresh "join"
+          pure (CApp (CVar j) (CInt 0), \body -> pure (CLet j (CLam ["_j"] nxtBig) body))
+      r <- goClause args ps g b nxt
+      wrap r
+    goClause args ps g b nxt = do
       let goGuards [] = dExpr b
           goGuards (GBool ge : gs) = do
             ge' <- dExpr ge

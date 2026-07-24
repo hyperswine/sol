@@ -88,6 +88,48 @@ Documented, not changed:
 * **Case arms are expressions** — no bindings in arms; factor a helper
   (this matches STYLE.md's advice but bites when porting code).
 
+## pos2.sol session findings (2026-07-24, later)
+
+Building `examples/pos2.sol` (login hero + Register/Receipts/Inventory
+dashboard, written in full STYLE.md idiom) plus a Node WebSocket driver
+(`tests/e2e/`) surfaced and fixed two significant bugs:
+
+* **Exponential multi-clause compilation — FIXED in Lang.hs.**
+  `compileGroup` spliced the fallthrough continuation (the Core of ALL
+  remaining clauses) verbatim into every failure point of a clause's
+  pattern/guard match. Tuple + literal head patterns have >= 2 failure
+  points, so the tree doubled per clause: 14 clauses 1.3s, 18 clauses
+  26s, the 22-clause idiomatic `update` was OOM-killed. Fixed with a
+  join point: the continuation is bound once per clause as a lambda
+  (lambda lifting turns it into an ordinary supercombinator; failure
+  sites become calls). After: 18 clauses 49ms, 60 clauses 83ms. The
+  property differential (whose generated helpers exercise clause and
+  guard fallthrough) plus the full battery validated the change.
+  Notable because the style guide's own recommendation (prefer
+  multi-clause) was previously a compiler DoS.
+
+* **WebSocket UTF-8 corruption — FIXED in Web.hs.** `BC.pack`/`BC.unpack`
+  are Char8 (Latin-1 truncation): any codepoint > 0xFF corrupted the
+  frame — an em-dash (U+2014) went out as control byte 0x14 and broke
+  the browser's `JSON.parse`. Fixed with dependency-free UTF-8
+  encode/decode at the WS frame boundary (`utf8Enc`/`utf8Dec`).
+
+Also observed: operator-named struct fields cannot be referenced as
+values at all (`Numeric.(+)` is a parse error) — bare-operator dispatch
+inside sig-generic bodies is the only route; and 1-based `!` claimed its
+predicted victim (a 0-based `catalog ! k` in the first draft).
+
+The E2E harness (`tests/e2e/`): `drive.js` runs a 16-check flow
+(register, buys, qty grouping, checkout, receipts row, stock decrement,
+restock, logout, wrong password, re-login with persisted revenue);
+`persist.js` restarts the server against the same logs and verifies a
+second cashier sees shared revenue/receipts/stock. `run-e2e.sh` runs
+both. Requires node + `npm install ws` in tests/e2e.
+
+The pos2 theme layer in Web.hs (`hero`, `nav`, `card-lg`, `hover-lift`,
+badge variants, `tbl`, `price`, ...) is purely additive — pinned apps
+are unaffected.
+
 ## Style pass (same session)
 
 `lib/plparse.sol` and `lib/logic.sol` rewritten to STYLE.md idioms:

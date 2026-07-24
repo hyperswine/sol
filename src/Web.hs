@@ -492,13 +492,42 @@ wsRecvText s = do
               case opcode of
                 0x8 -> pure Nothing
                 0x9 -> sendAll s (BS.pack [0x8A, 0]) >> wsRecvText s
-                0x1 -> pure (Just (BC.unpack unmasked))
+                0x1 -> pure (Just (utf8Dec unmasked))
                 _ -> wsRecvText s
             _ -> pure Nothing
 
+-- UTF-8 at the WS boundary. BC.pack/BC.unpack are Char8 (Latin-1
+-- truncation): any codepoint > 0xFF corrupted the frame — an em-dash
+-- (U+2014) became control byte 0x14 and broke the browser's JSON.parse.
+utf8Enc :: String -> BS.ByteString
+utf8Enc = BS.pack . concatMap enc
+  where
+    enc c
+      | o < 0x80 = [fromIntegral o]
+      | o < 0x800 = [0xc0 .|. sh 6, tl 0]
+      | o < 0x10000 = [0xe0 .|. sh 12, tc 6, tl 0]
+      | otherwise = [0xf0 .|. sh 18, tc 12, tc 6, tl 0]
+      where
+        o = ord c
+        sh n = fromIntegral (o `shiftR` n)
+        tc n = 0x80 .|. fromIntegral ((o `shiftR` n) .&. 0x3f)
+        tl n = 0x80 .|. fromIntegral ((o `shiftR` n) .&. 0x3f)
+
+utf8Dec :: BS.ByteString -> String
+utf8Dec = go . BS.unpack
+  where
+    go [] = []
+    go (b : bs)
+      | b < 0x80 = chr (fromIntegral b) : go bs
+      | b < 0xe0, (c1 : r) <- bs = chr (((fromIntegral b .&. 0x1f) `shiftL` 6) .|. cont c1) : go r
+      | b < 0xf0, (c1 : c2 : r) <- bs = chr (((fromIntegral b .&. 0x0f) `shiftL` 12) .|. (cont c1 `shiftL` 6) .|. cont c2) : go r
+      | (c1 : c2 : c3 : r) <- bs = chr (((fromIntegral b .&. 0x07) `shiftL` 18) .|. (cont c1 `shiftL` 12) .|. (cont c2 `shiftL` 6) .|. cont c3) : go r
+      | otherwise = go bs -- truncated tail: drop
+    cont c = fromIntegral c .&. 0x3f
+
 wsSendText :: Socket -> String -> IO ()
 wsSendText s payload = do
-  let bytes = BC.pack payload
+  let bytes = utf8Enc payload
       n = BS.length bytes
       hdr
         | n < 126 = BS.pack [0x81, fromIntegral n]
@@ -578,6 +607,37 @@ clientPage =
       ".comment{background:#f1f5f9;border-radius:.4rem;padding:.45rem .7rem;font-size:.92rem}",
       ".input{padding:.45rem .7rem;border:1px solid #cbd5e1;border-radius:.5rem;font-size:.92rem;min-width:0}",
       ".btn{padding:.45rem .9rem;border:0;border-radius:.5rem;background:#2456c4;color:#fff;cursor:pointer;font-size:.92rem}",
+      -- ---- pos2 theme layer (additive; nothing above changes) ----
+      ":root{--ink:#0f172a;--mut:#64748b;--line:#e2e8f0;--pri:#4f46e5;--pri2:#7c3aed;--ok:#059669;--bad:#dc2626;--warn:#d97706}",
+      ".app-bg{min-height:100vh;background:linear-gradient(180deg,#f8fafc 0%,#eef2ff 100%)}",
+      ".hero{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(1000px 500px at 20% -10%,#e0e7ff 0%,transparent 60%),radial-gradient(900px 500px at 110% 110%,#ede9fe 0%,transparent 55%),#f8fafc}",
+      ".hero-card{background:rgba(255,255,255,.85);backdrop-filter:blur(8px);border:1px solid #e2e8f0;border-radius:1rem;padding:2rem;box-shadow:0 20px 50px rgba(79,70,229,.12);width:100%;max-width:420px}",
+      ".brand-grad{background:linear-gradient(90deg,var(--pri),var(--pri2));-webkit-background-clip:text;background-clip:text;color:transparent}",
+      ".nav{position:sticky;top:0;z-index:10;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;gap:.75rem;padding:.6rem 1rem;box-shadow:0 2px 10px rgba(15,23,42,.25)}",
+      ".navtab{padding:.35rem .85rem;border-radius:.5rem;color:#cbd5e1;cursor:pointer;font-size:.9rem;user-select:none}",
+      ".navtab:hover{background:#1e293b;color:#fff}",
+      ".navtab-active{background:#4f46e5;color:#fff}",
+      ".text-3xl{font-size:2.1rem} .text-xs{font-size:.72rem} .font-semi{font-weight:600} .tracking{letter-spacing:.02em}",
+      ".grid-cols-3{grid-template-columns:1fr 1fr 1fr} .w-full{width:100%} .justify-between{justify-content:space-between} .text-right{text-align:right} .text-center{text-align:center}",
+      ".mt-2{margin-top:.5rem} .mb-2{margin-bottom:.5rem}",
+      ".card-lg{background:#fff;border:1px solid var(--line);border-radius:.9rem;padding:1.25rem;box-shadow:0 4px 16px rgba(15,23,42,.05)}",
+      ".hover-lift{transition:transform .12s ease,box-shadow .12s ease}",
+      ".hover-lift:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(79,70,229,.14)}",
+      ".badge-green{background:#ecfdf5;color:var(--ok);border-radius:999px;padding:.15rem .6rem;font-size:.75rem;font-weight:600}",
+      ".badge-red{background:#fef2f2;color:var(--bad);border-radius:999px;padding:.15rem .6rem;font-size:.75rem;font-weight:600}",
+      ".badge-amber{background:#fffbeb;color:var(--warn);border-radius:999px;padding:.15rem .6rem;font-size:.75rem;font-weight:600}",
+      ".btn-ghost{padding:.45rem .9rem;border:1px solid var(--line);border-radius:.5rem;background:#fff;color:var(--ink);cursor:pointer;font-size:.92rem}",
+      ".btn-ghost:hover{border-color:#94a3b8}",
+      ".btn-danger{padding:.45rem .9rem;border:0;border-radius:.5rem;background:var(--bad);color:#fff;cursor:pointer;font-size:.92rem}",
+      ".btn:hover{filter:brightness(1.08)}",
+      ".price{font-variant-numeric:tabular-nums;font-weight:700;color:var(--pri)}",
+      ".divider{height:1px;background:var(--line)}",
+      ".tbl{width:100%;border-collapse:collapse} .tbl th{text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);padding:.5rem .6rem;border-bottom:1px solid var(--line)}",
+      ".tbl td{padding:.55rem .6rem;border-bottom:1px solid #f1f5f9;font-size:.92rem}",
+      ".tbl tr:hover td{background:#f8fafc}",
+      ".stock-out{opacity:.45;pointer-events:none}",
+      ".empty{color:var(--mut);text-align:center;padding:1.5rem;font-size:.92rem}",
+      "@media (max-width:640px){ .grid-cols-3{grid-template-columns:1fr 1fr} .hero-card{margin:1rem} }",
       "@media (max-width:640px){ .grid-cols-2{grid-template-columns:1fr} .flex-row{flex-wrap:wrap} .container{padding:.5rem} }",
       "</style></head><body><div id='root'></div><script>",
       "let tok = localStorage.getItem('sol-token');",
