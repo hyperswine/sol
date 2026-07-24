@@ -1,0 +1,83 @@
+LET EXPR BINDING CHAINS
+
+a; b; c --> let _ = a in let _ = b in c
+x = a; b = c; b + 1 --> let x = a in let b = c in b + 1
+
+Declarative Semantics:
+let x = a in e --> env[x -> a] e
+
+Operational Semantics against RegMachine (Strict Evaluation, Call-by-Value, Lexical Scope):
+let x = a in e -->
+  let v = eval(a) in
+  let env' = extend(env, x, v) in
+  eval(e, env')
+
+FN DEFS
+
+f a1 a2 ... an = e --> env[f -> (a1, a2, ..., an, e)] e
+
+FN CALLS
+
+f e1 e2 ... en --> f(e1, e2, ..., en) | mathematical function application, with effects = State semantics
+
+f e1 e2 ... en --> let (a1, a2, ..., an, e) = env[f] in
+                   let v1 = eval(e1) in
+                   let v2 = eval(e2) in
+                   ...
+                   let vn = eval(en) in
+                   let env' = extend(env, a1, v1) in
+                   let env'' = extend(env', a2, v2) in
+                   ...
+                   let env^(n) = extend(env^(n-1), an, vn) in
+                   eval(e, env^(n))
+
+EFFECTS
+
+effectful_function : a -> Effect, effectful_function e -> World[Effect] | do not need to annotate to perform effects; can be performed anywhere
+
+println e --> let v = eval(e) in
+              print(v)
+
+
+LINEAR
+
+f : a -> Handle 1, f e --> env[f -> (a, Handle 1, e)] | Handle 1 must be used linearly, i.e. exactly once, in the body of f
+
+f h = e, f h |/= env[] | env must not be empty after evaluation, it must contain exactly one binding for h
+
+f : Handle 1 -> a, f h --> let v = eval(h) in
+          let env' = extend(env, h, v) in
+          eval(e, env')
+
+Any type that isnt linear must be linearized if it is used in a linear context. For example, if a function expects a linear type but receives a non-linear type, the non-linear type must be converted to a linear type before it can be used.
+"Effect safety" falls out of verified protocol design involving linear types such as the use of a resource like UART
+
+PATTERN MATCHING
+
+f p1 p2 ... pn = e --> f x1 x2 ... xn = case x1 of p1 -> case x2 of p2 -> ... case xn of pn -> e
+
+case e1 of p1 -> e2 | p2 -> e3 | ... | pn -> en --> let v = eval(e1) in
+  match v with
+  | p1 -> eval(e2)
+  | p2 -> eval(e3)
+  ...
+  | pn -> eval(en)
+
+SUGAR
+
+|> --> pipeline operator, e1 |> e2 --> let v = eval(e1) in eval(e2, v)
+|>? --> pipeline operator with Result, e1 |>? e2 --> let v = eval(e1) in match v with
+                | Ok x -> eval(e2, x)
+                | Err e -> Err e
+$ --> haskell like syntax for low precedence function application, e1 $ e2 --> let v = eval(e1) in eval(e2, v)
+> --> e.g. > expr. means evaluate expr at the top level, i.e. in the global environment. e.g. > println "Hello, World!" means evaluate println "Hello, World!" in the global environment.
+"{mystr}" --> string interpolation, e.g. "Hello, {name}!" --> let v = eval(name) in "Hello, " ++ v ++ "!"
+
+Operators: typical arithmetic and logical operators, with standard precedence and associativity rules. For example:
+e1 + e2 --> (+) e1 e2
+
+Becomes typical function application, with effects = State semantics
+
+Notes. Some syntatic expressions may require parentheses to disambiguate. For example, (a + b) * c is different from a + (b * c). The former means "add a and b, then multiply the result by c", while the latter means "multiply b and c, then add a to the result".
+Especially true if you have nested let expressions, case expressions, etc that you want to do in a certain way
+There is no builtin if expression, but you can use pattern matching to achieve the same effect.
