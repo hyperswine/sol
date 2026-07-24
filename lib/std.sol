@@ -27,4 +27,4 @@ total (s : Arith) xs = foldl s.add s.zero xs.
 mapKeep (f : Functor) (st : StreamOps) g p xs = st.sfilter p (f.fmap g xs).
 
 # generic composing another generic, struct passed through
-average xs = n = strlen (str 0); t = total Num xs; c = foldl (fn a x -> a + 1) 0 xs; t / c.
+average xs = t = total Num xs; c = List.len xs; t / c.

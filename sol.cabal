@@ -27,6 +27,7 @@ executable sol
     main-is:          Main.hs
     hs-source-dirs:   src
     other-modules:    Bytecode
+                    , Preamble
                     , JIT
                     , Lang
                     , Txn
@@ -68,6 +69,55 @@ executable sol
       ghc-options:      -optl-Wl,-rpath,/opt/homebrew/opt/llvm/lib
     else
       -- LLVM 18 (default): Linux apt layout (llvm-18 / libLLVM-18.so)
+      include-dirs:     /usr/lib/llvm-18/include
+      extra-lib-dirs:   /usr/lib/llvm-18/lib
+      extra-libraries:  LLVM-18
+
+test-suite props
+    type:             exitcode-stdio-1.0
+    main-is:          Props.hs
+    hs-source-dirs:   test, src
+    other-modules:    Bytecode
+                    , Preamble
+                    , JIT
+                    , Lang
+                    , Txn
+                    , VM
+                    , Mod
+                    , Val
+                    , Web
+                    , Struct
+                    , Width
+                    , Infer
+
+    build-depends:    base >=4 && <5
+                    , containers
+                    , directory
+                    , megaparsec
+                    , mtl
+                    , array
+                    , process
+                    , filepath
+                    , bytestring
+                    , network
+                    , time
+                    , hedgehog
+
+    default-language: Haskell2010
+    ghc-options:      -threaded
+
+    c-sources:        cbits/shim.c
+    cc-options:       -D__STDC_CONSTANT_MACROS
+                      -D__STDC_FORMAT_MACROS
+                      -D__STDC_LIMIT_MACROS
+
+    if flag(llvm22)
+      cpp-options:      -DLLVM22
+      include-dirs:     /opt/homebrew/opt/llvm/include
+      extra-lib-dirs:   /opt/homebrew/opt/llvm/lib
+      extra-libraries:  LLVM
+      ghc-options:      -optl-Wl,-rpath,/opt/homebrew/opt/llvm/lib
+    else
       include-dirs:     /usr/lib/llvm-18/include
       extra-lib-dirs:   /usr/lib/llvm-18/lib
       extra-libraries:  LLVM-18

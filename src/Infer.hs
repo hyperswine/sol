@@ -321,8 +321,10 @@ builtinEnv =
       ("exists", mono (TFn tStr tBool)),
       ("isDir", mono (TFn tStr tBool)),
       ("stat", scheme [0] (TFn tStr (sv 0))),
-      ("sh", mono (TFn tStr tStr)),
-      ("shq", mono (TFn tStr tStr)),
+      -- sh returns (exitCode, output); shq is a queued effect -> Unit
+      -- (was String/String — the VM disagreed; caught by tests/compose/c8)
+      ("sh", mono (TFn tStr (TTupT [tInt, tStr]))),
+      ("shq", mono (TFn tStr tUnit)),
       ("!", scheme [0, 1] (TFn (sv 0) (TFn tInt (sv 1)))), -- indexing; builtin-overloaded List/Vector — candidate for an Index sig
       ("map", scheme [0, 1] (TFn (TFn (sv 0) (sv 1)) (TFn (tList (sv 0)) (tList (sv 1))))),
       ("filter", scheme [0] (TFn (TFn (sv 0) tBool) (TFn (tList (sv 0)) (tList (sv 0))))),

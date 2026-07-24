@@ -32,17 +32,16 @@ builtinSyms = ["is", "plus", "minus", "mul", "div", "mod", "gt", "lt",
                "gte", "lte", "unify", "neq", "true", "fail", "write", "nl"].
 
 symsInit = mkSyms 1 builtinSyms.
-mkSyms k ns | ns == [] = [].
-mkSyms k ns = case ns of n :: r -> (n, k) :: mkSyms (k + 1) r.
+mkSyms _ [] = [].
+mkSyms k (n :: r) = (n, k) :: mkSyms (k + 1) r.
 
 Opt = Type (Nope | Got x).
 
-lookupS k ps | ps == [] = Nope.
-lookupS k ps = case ps of p :: r -> lsStep k p r.
-lsStep k p r = (k2, v) = p; case k2 == k of True -> Got v | False -> lookupS k r.
+lookupS _ [] = Nope.
+lookupS k ((k2, v) :: _) | k2 == k = Got v.
+lookupS k (_ :: r) = lookupS k r.
 
-symsLen ps = foldl s1 0 ps.
-s1 a x = a + 1.
+symsLen ps = List.len ps.
 
 # intern name -> (id, syms')
 intern nm syms = case lookupS nm syms of

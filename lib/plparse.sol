@@ -36,10 +36,16 @@ tkNum t = (k, s, n) = t; n.
 isP t s2 = (k, s, n) = t; base.and2 (k == 4) (s == s2).
 
 # ---------- tokenizer ----------
-isDigit c = base.and2 (c >= 48) (c <= 57).
-isLower c = base.or2 (base.and2 (c >= 97) (c <= 122)) (c == 95).
-isUpper c = base.and2 (c >= 65) (c <= 90).
-isIdent c = base.or2 (base.or2 (isLower c) (isUpper c)) (isDigit c).
+isDigit c | c >= 48, c <= 57 = True.
+isDigit _ = False.
+isLower 95 = True.
+isLower c | c >= 97, c <= 122 = True.
+isLower _ = False.
+isUpper c | c >= 65, c <= 90 = True.
+isUpper _ = False.
+isIdent c | isLower c = True.
+isIdent c | isUpper c = True.
+isIdent c = isDigit c.
 
 # strip comment: cut line at first '#'
 stripC ln =
@@ -48,38 +54,35 @@ stripC ln =
 
 tokLine ln = toks (stripC ln) 1.
 
-toks ln i | i > strlen ln = [].
-toks ln i =
-  c = charAt ln i;
-  case c == 32 of True -> toks ln (i + 1) | False ->
-  case isDigit c of True -> lexInt ln i 0 | False ->
-  case c == 95 of True -> lexIdent ln i i tVar | False ->
-  case isLower c of True -> lexIdent ln i i tAtom | False ->
-  case isUpper c of True -> lexIdent ln i i tVar | False -> lexPunct ln i c.
+toks ln i | i > Str.len ln = [].
+toks ln i = tok1 ln i (Str.at ln i).
 
-lexInt ln i acc =
-  case base.and2 (i <= strlen ln) (isDigit (charAt ln i)) of
-    True -> lexInt ln (i + 1) (acc * 10 + (charAt ln i - 48))
-  | False -> tInt acc :: toks ln i.
+tok1 ln i 32 = toks ln (i + 1).
+tok1 ln i 95 = lexIdent ln i i tVar.
+tok1 ln i c | isDigit c = lexInt ln i 0.
+tok1 ln i c | isLower c = lexIdent ln i i tAtom.
+tok1 ln i c | isUpper c = lexIdent ln i i tVar.
+tok1 ln i c = lexPunct ln i c.
 
-lexIdent ln s i mk =
-  case base.and2 (i <= strlen ln) (isIdent (charAt ln i)) of
-    True -> lexIdent ln s (i + 1) mk
-  | False -> mk (base.substr ln s (i - 1)) :: toks ln i.
+lexInt ln i acc | i <= Str.len ln, isDigit (Str.at ln i) =
+  lexInt ln (i + 1) (acc * 10 + (Str.at ln i - 48)).
+lexInt ln i acc = tInt acc :: toks ln i.
 
-# multi-char puncts: <-  >=  <=  !=
-lexPunct ln i c =
-  nxt = case i < strlen ln of True -> charAt ln (i + 1) | False -> 0;
-  case base.and2 (c == 60) (nxt == 45) of True -> tP "<-" :: toks ln (i + 2) | False ->
-  case base.and2 (c == 62) (nxt == 61) of True -> tP ">=" :: toks ln (i + 2) | False ->
-  case base.and2 (c == 60) (nxt == 61) of True -> tP "<=" :: toks ln (i + 2) | False ->
-  case base.and2 (c == 33) (nxt == 61) of True -> tP "!=" :: toks ln (i + 2) | False ->
-  tP "{chr c}" :: toks ln (i + 1).
+lexIdent ln s i mk | i <= Str.len ln, isIdent (Str.at ln i) = lexIdent ln s (i + 1) mk.
+lexIdent ln s i mk = mk (base.substr ln s (i - 1)) :: toks ln i.
 
-tokAll lns | lns == [] = [].
-tokAll lns = case lns of l :: r -> base2app (tokLine l) (tokAll r).
-base2app xs ys | xs == [] = ys.
-base2app xs ys = case xs of x :: r -> x :: base2app r ys.
+# multi-char puncts: <-  >=  <=  !=  (literal-pattern dispatch on (c, next))
+lexPunct ln i c = lexP2 c (punNxt ln i) ln i.
+punNxt ln i | i < Str.len ln = Str.at ln (i + 1).
+punNxt _ _ = 0.
+lexP2 60 45 ln i = tP "<-" :: toks ln (i + 2).
+lexP2 62 61 ln i = tP ">=" :: toks ln (i + 2).
+lexP2 60 61 ln i = tP "<=" :: toks ln (i + 2).
+lexP2 33 61 ln i = tP "!=" :: toks ln (i + 2).
+lexP2 c _ ln i = tP (Str.fromCode c) :: toks ln (i + 1).
+
+tokAll [] = [].
+tokAll (l :: r) = List.append (tokLine l) (tokAll r).
 
 # ---------- precedence-climbing parser over the token list ----------
 # every parser returns (result, remainingTokens); errors panic
@@ -93,13 +96,13 @@ peekP toks s = case toks of
 
 pExpr toks = pCmp toks.
 
-cmpName s =
-  case s == ">" of True -> "gt" | False ->
-  case s == "<" of True -> "lt" | False ->
-  case s == ">=" of True -> "gte" | False ->
-  case s == "<=" of True -> "lte" | False ->
-  case s == "!=" of True -> "neq" | False ->
-  case s == "=" of True -> "unify" | False -> "".
+cmpName ">" = "gt".
+cmpName "<" = "lt".
+cmpName ">=" = "gte".
+cmpName "<=" = "lte".
+cmpName "!=" = "neq".
+cmpName "=" = "unify".
+cmpName _ = "".
 
 pCmp toks =
   (l, t1) = pAdd toks;
@@ -202,7 +205,7 @@ pRule hd t1 =
   (body, t2) = pGoals (expect t1 "<-");
   (SClause hd body, expect t2 ".").
 
-pStmts toks | toks == [] = [].
+pStmts [] = [].
 pStmts toks =
   (s, t2) = pStmt toks;
   s :: pStmts t2.
@@ -225,9 +228,9 @@ convNamed nm syms vm nx =
     Got2 i -> (logic.PV i, syms, (vm, nx))
   | Nope2 -> (logic.PV nx, syms, ((nm, nx) :: vm, nx + 1)).
 
-lookupV k ps | ps == [] = Nope2.
-lookupV k ps = case ps of p :: r -> lvStep k p r.
-lvStep k p r = (k2, v) = p; case k2 == k of True -> Got2 v | False -> lookupV k r.
+lookupV _ [] = Nope2.
+lookupV k ((k2, v) :: _) | k2 == k = Got2 v.
+lookupV k (_ :: r) = lookupV k r.
 
 convAtom nm syms cv =
   (i, syms2) = logic.intern nm syms;
@@ -238,8 +241,8 @@ convC nm args syms cv =
   (pargs, syms3, cv3) = convList args syms2 cv;
   (logic.PC i pargs, syms3, cv3).
 
-convList rs syms cv | rs == [] = ([], syms, cv).
-convList rs syms cv = case rs of r :: rest -> clStep r rest syms cv.
+convList [] syms cv = ([], syms, cv).
+convList (r :: rest) syms cv = clStep r rest syms cv.
 clStep r rest syms cv =
   (p, syms2, cv2) = conv r syms cv;
   (ps, syms3, cv3) = convList rest syms2 cv2;
@@ -256,10 +259,7 @@ buildClause hd body syms =
 buildQuery gs syms =
   (gp, syms2, cv2) = convList gs syms ([], 1);
   (vm, nx) = cv2;
-  (gp, nx - 1, revL [] vm, syms2).
-
-revL acc xs | xs == [] = acc.
-revL acc xs = case xs of x :: r -> revL (x :: acc) r.
+  (gp, nx - 1, List.rev vm, syms2).
 
 # ---------- top level: source lines -> (db, queries, syms) ----------
 # queries: [(goalsPT, nqv, qnames)]
@@ -267,8 +267,8 @@ loadProgram lns =
   stmts = pStmts (tokAll lns);
   foldStmts stmts [] [] logic.symsInit.
 
-foldStmts ss db qs syms | ss == [] = (revL [] db, revL [] qs, syms).
-foldStmts ss db qs syms = case ss of s :: r -> fsStep s r db qs syms.
+foldStmts [] db qs syms = (List.rev db, List.rev qs, syms).
+foldStmts (s :: r) db qs syms = fsStep s r db qs syms.
 fsStep s r db qs syms = case s of
   SClause hd body -> fsClause hd body r db qs syms
 | SQuery gs -> fsQuery gs r db qs syms.
