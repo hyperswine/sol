@@ -3,6 +3,9 @@
 # recursion JIT-compiled with fix.fmul in its closure, running on the
 # unboxed column. Rendering is interpreted string work, kept separate.
 
+# IDEALLY: use the builtin Numeric datatype and infer the fixed point float type as an optimization julia-style
+# rather than fix
+
 fix = use "../lib/fix".
 
 w = 110.

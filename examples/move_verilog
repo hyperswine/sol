@@ -1,0 +1,6 @@
+#!/usr/bin/env sol
+
+# move a file called top.v in current dir to a subdir called "sub" (creating it if needed), atomically.
+> _ = mkdirp "sub";
+  x = readPath "top.v";
+  writePath "sub/top.v" x.

@@ -521,3 +521,16 @@ the scheme (program bindings dispatch before HAL symbols).
   store, which is the FPR OS object-store commit protocol in miniature
 - hot reload: CALL is already resolved by name per activation, so patching the
   function table between transactions is the natural reload point
+
+## Creating Invokable Sol Scripts
+
+Create an extensionless file like `myscript` somewhere, preferrably in a version controlled or private area. Add the env shebang `#!/usr/bin/env sol` to automatically resolve `sol` from PATH (works if you cabal install it). Then:
+
+```
+chmod +x path/to/myscript
+ln -s /path/to/myscript ~/.local/bin/myscript
+```
+
+Create a link to it in $HOME/.local/bin. Now `myscript` usable from anywhere in the chroot without any further env or PATH modifications.
+
+To delete it, simply just delete the link in .local bin.

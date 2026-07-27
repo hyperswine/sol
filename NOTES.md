@@ -28,3 +28,14 @@ cabal run sol -- examples/vec.sol  0.04s user 0.02s system 72% cpu 0.084 total
 
 Synchronous Actor block groups could also be supported like they are in FP-RISC and QOS. With Par.create and Par.start and Par.finish
 Par.start' would do all of them.
+
+-----
+
+MAKE NUMERIC the first class datatype and use `Vector Numeric` with things like Vec.map and so on to do it with SIMD-SOA JIT compilation in a fast way.
+
+Make it so we always do things like
+
+rnd = use "rnd ... ".
+Rand = rnd.Rand.
+
+Then use Rand.x everywhere
