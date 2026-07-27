@@ -31,7 +31,7 @@ import Data.Int (Int64)
 import Data.List (intercalate)
 import Foreign.ForeignPtr (ForeignPtr, mallocForeignPtrArray, withForeignPtr)
 import Foreign.Marshal.Array (withArray)
-import Foreign.Ptr (Ptr, nullPtr)
+import Foreign.Ptr (Ptr, nullPtr, castPtr)
 import Foreign.Storable (peekElemOff, pokeElemOff)
 
 boolT, listT, atomT :: Int
@@ -41,6 +41,7 @@ atomT = 6
 
 data Value
   = VInt !Integer
+  | VNum !Double -- inexact Numeric: arises from Num.div/Num.sqrt etc.; VInt promotes into it on contact
   | VStr String
   | VData !Int !Int [Value]
   | VPap String [Value] !Int -- global or HAL symbol, collected args, remaining
@@ -64,6 +65,9 @@ isUnit _ = False
 
 veq :: Value -> Value -> Bool
 veq (VInt a) (VInt b) = a == b
+veq (VNum a) (VNum b) = a == b
+veq (VInt a) (VNum b) = fromIntegral a == b -- Numeric: 1 == 1.0
+veq (VNum a) (VInt b) = a == fromIntegral b
 veq (VStr a) (VStr b) = a == b
 veq (VData t v fs) (VData t' v' fs') =
   t == t' && v == v' && length fs == length fs' && and (zipWith veq fs fs')
@@ -71,6 +75,7 @@ veq _ _ = False
 
 render :: Value -> String
 render (VInt i) = show i
+render (VNum d) = renderNum d
 render (VStr s) = s
 render v@(VData t 1 [_, _]) | t == listT = "[" ++ intercalate ", " (renderList v) ++ "]"
   where
@@ -90,10 +95,11 @@ render (VMod p h) = "<module " ++ p ++ "#" ++ take 8 h ++ "...>"
 
 -- ---- the SoA store ----------------------------------------------------------
 
-data ColKind = KInt | KBox deriving (Eq)
+data ColKind = KInt | KNum | KBox deriving (Eq)
 
 data Col
   = CI !Int (ForeignPtr Int64) -- capacity, unboxed i64 column
+  | CD !Int (ForeignPtr Double) -- capacity, unboxed f64 column (Numeric)
   | CB !Int (IOArray Int Value) -- capacity, boxed column
 
 data VecRep
@@ -116,23 +122,29 @@ newVec = VVec <$> newIORef (VecStore 0 [] RUnset)
 
 kindOf :: Value -> ColKind
 kindOf (VInt _) = KInt
+kindOf (VNum _) = KNum
 kindOf _ = KBox
 
 newCol :: ColKind -> Int -> IO Col
 newCol KInt cap = CI cap <$> mallocForeignPtrArray cap
+newCol KNum cap = CD cap <$> mallocForeignPtrArray cap
 newCol KBox cap = CB cap <$> newArray_ (0, cap - 1)
 
 colCap :: Col -> Int
 colCap (CI c _) = c
+colCap (CD c _) = c
 colCap (CB c _) = c
 
 writeCol :: Col -> Int -> Value -> IO ()
 writeCol (CI _ fp) i (VInt x) = withForeignPtr fp $ \p -> pokeElemOff p i (fromIntegral x)
 writeCol (CI _ _) _ v = ioError (userError ("*** SOL PANIC: Vec: Int column got " ++ render v ++ " (SoA layout is fixed by first push) ***"))
+writeCol (CD _ fp) i (VNum x) = withForeignPtr fp $ \p -> pokeElemOff p i x
+writeCol (CD _ _) _ v = ioError (userError ("*** SOL PANIC: Vec: Numeric column got " ++ render v ++ " (SoA layout is fixed by first push) ***"))
 writeCol (CB _ a) i v = writeArray a i v
 
 readCol :: Col -> Int -> IO Value
 readCol (CI _ fp) i = withForeignPtr fp $ \p -> VInt . fromIntegral <$> peekElemOff p i
+readCol (CD _ fp) i = withForeignPtr fp $ \p -> VNum <$> peekElemOff p i
 readCol (CB _ a) i = readArray a i
 
 growCol :: Int -> Col -> IO Col
@@ -142,6 +154,12 @@ growCol len (CI cap fp) = do
   withForeignPtr fp $ \src -> withForeignPtr fp' $ \dst ->
     mapM_ (\i -> peekElemOff src i >>= pokeElemOff dst i) [0 .. len - 1]
   pure (CI cap' fp')
+growCol len (CD cap fp) = do
+  let cap2 = cap * 2
+  fp2 <- mallocForeignPtrArray cap2
+  withForeignPtr fp $ \src -> withForeignPtr fp2 $ \dst ->
+    mapM_ (\i -> peekElemOff src i >>= pokeElemOff dst i) [0 .. len - 1]
+  pure (CD cap2 fp2)
 growCol len (CB cap a) = do
   let cap' = cap * 2
   a' <- newArray_ (0, cap' - 1)
@@ -240,17 +258,36 @@ withColPtrs st k = go (vCols st) []
   where
     go [] acc = withArray (reverse acc) k
     go (CI _ fp : r) acc = withForeignPtr fp $ \p -> go r (p : acc)
+    go (CD _ fp : r) acc = withForeignPtr fp $ \p -> go r (castPtr p : acc)
     go (CB _ _ : r) acc = go r (nullPtr : acc)
 
 -- which columns are unboxed ints, and is the layout scalar?
-layoutInfo :: VecStore -> Maybe (Bool, [Bool], String)
+layoutInfo :: VecStore -> Maybe (Bool, [ColKind], String)
 layoutInfo st = case vRep st of
-  RScalar KInt -> Just (True, [True], "s:i")
-  RScalar KBox -> Just (True, [False], "s:b")
-  RSoA tid ks ->
-    Just
-      ( False,
-        map (== KInt) ks,
-        "r" ++ show tid ++ ":" ++ map (\k -> if k == KInt then 'i' else 'b') ks
-      )
+  RScalar k -> Just (True, [k], "s:" ++ [kChar k])
+  RSoA tid ks -> Just (False, ks, "r" ++ show tid ++ ":" ++ map kChar ks)
   RUnset -> Nothing
+  where
+    kChar KInt = 'i'
+    kChar KNum = 'd'
+    kChar KBox = 'b'
+
+-- inexact Numeric rendering: integral values print bare ("2" not "2.0") so
+-- a computation that lands back on an integer renders like one; everything
+-- else prints the shortest Double form
+renderNum :: Double -> String
+renderNum d
+  | isNaN d = "nan"
+  | isInfinite d = if d > 0 then "inf" else "-inf"
+  | d == fromIntegral r = show r
+  | otherwise = show d
+  where
+    r = round d :: Integer
+
+-- fresh scalar KNum vector from JITted map output
+vecFromNums :: [Double] -> IO Value
+vecFromNums xs = do
+  let n = max 1 (length xs)
+  fp <- mallocForeignPtrArray n
+  withForeignPtr fp $ \p -> mapM_ (\(i, x) -> pokeElemOff p i x) (zip [0 ..] xs)
+  VVec <$> newIORef (VecStore (length xs) [CD n fp] (RScalar KNum))

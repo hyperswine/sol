@@ -394,6 +394,7 @@ jsonVC shapes conNames = go
     go v = goPlain v
     goPlain (VInt n) = show n
     goPlain (VStr s) = jstr s
+    goPlain (VNum d) = renderNum d
     goPlain (VData 1 0 []) = "false"
     goPlain (VData 1 1 []) = "true"
     goPlain (VData 0 0 []) = "null"

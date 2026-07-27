@@ -303,7 +303,7 @@ scheme vs = Forall vs []
 builtinEnv :: TEnv
 builtinEnv =
   M.fromList
-    [ ("print", scheme [0] (TFn (sv 0) tUnit)),
+    [
       ("str", scheme [0] (TFn (sv 0) tStr)),
       ("strcat", mono (TFn tStr (TFn tStr tStr))),
       ("strlen", mono (TFn tStr tInt)),
@@ -312,19 +312,15 @@ builtinEnv =
       ("parseInt", mono (TFn tStr tInt)),
       ("charAt", mono (TFn tStr (TFn tInt tInt))), -- returns the char CODE
       ("chr", mono (TFn tInt tStr)),
-      ("sleepMs", mono (TFn tInt tUnit)),
-      ("fuelPreempts", mono (TFn tInt tInt)),
-      ("rm", mono (TFn tStr tUnit)),
-      ("rmdir", mono (TFn tStr tUnit)),
-      ("mkdirp", mono (TFn tStr tUnit)),
-      ("ls", mono (TFn tStr (tList tStr))),
-      ("exists", mono (TFn tStr tBool)),
-      ("isDir", mono (TFn tStr tBool)),
-      ("stat", scheme [0] (TFn tStr (sv 0))),
-      -- sh returns (exitCode, output); shq is a queued effect -> Unit
-      -- (was String/String — the VM disagreed; caught by tests/compose/c8)
-      ("sh", mono (TFn tStr (TTupT [tInt, tStr]))),
-      ("shq", mono (TFn tStr tUnit)),
+      -- read/write: THE two HAL doors. What comes back (read) or is
+      -- accepted (write) depends on the path/query value the HAL decodes,
+      -- so both are maximally generic — the same stance `stat` already took.
+      ("read", scheme [0, 1] (TFn (sv 0) (sv 1))),
+      ("Num.div", mono (TFn tInt (TFn tInt tInt))), -- tInt IS the Numeric type
+      ("Num.sqrt", mono (TFn tInt tInt)),
+      ("Num.floor", mono (TFn tInt tInt)),
+      ("Num.round", mono (TFn tInt tInt)),
+      ("write", scheme [0, 1] (TFn (sv 0) (TFn (sv 1) tUnit))),
       ("!", scheme [0, 1] (TFn (sv 0) (TFn tInt (sv 1)))), -- indexing; builtin-overloaded List/Vector — candidate for an Index sig
       ("map", scheme [0, 1] (TFn (TFn (sv 0) (sv 1)) (TFn (tList (sv 0)) (tList (sv 1))))),
       ("filter", scheme [0] (TFn (TFn (sv 0) tBool) (TFn (tList (sv 0)) (tList (sv 0))))),

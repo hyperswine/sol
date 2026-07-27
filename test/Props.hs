@@ -81,8 +81,6 @@ runSol userSrc = do
                           shapes = collectShapes allX
                           (prog, _) = runState (compileTop allX >>= liftFix) (DEnv 0 cons shapes [])
                           bprog = compileProg halArities prog
-                          Just (pathT, _, _) = M.lookup "Path" cons
-                          Just (handleT, _, _) = M.lookup "Handle" cons
                       tx <- newTx
                       preempts <- newIORef 0
                       fuel <- newIORef fuelQuantum
@@ -95,7 +93,7 @@ runSol userSrc = do
                                 vmProg = bprog,
                                 vmCore = prog,
                                 vmJit = Nothing,
-                                vmHal = mkHal pathT handleT tx preempts,
+                                vmHal = mkHal cons tx preempts,
                                 vmFuel = fuel,
                                 vmPreempts = preempts
                               }

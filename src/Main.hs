@@ -54,7 +54,14 @@ main = do
   -- definitions in, renamed under the alias; `m.f` references and
   -- `T = m.T.` constructor aliases then resolve against the merged program
   seenRef <- newIORef M.empty
-  utopsX0 <- expandUses 8 "" seenRef (takeDirectory path) utops
+  utopsX0' <- expandUses 8 "" seenRef (takeDirectory path) utops
+  -- `Rand = rnd.Rand.` where the target is an imported STRUCT: resolve the
+  -- local alias by rewriting every `Rand` / `Rand.f` reference to the
+  -- canonical spliced name, so field calls hit the flat globals and
+  -- struct-literal call sites still monomorphize. (Targets that are types
+  -- or constructors keep the existing TConAlias behavior untouched.)
+  let utopsX0 = aliasStructRefs utopsX0'
+
 
   -- sigs / structs / (s : Sig) params — now including the PRELUDE stdlib
   -- structs (Numeric/Str/List): conformance-check, expand structs to flat
@@ -121,8 +128,6 @@ main = do
       shapes = collectShapes tops
       (prog, _) = runState (compileTop tops >>= liftFix) (DEnv 0 cons shapes [])
       bprog = compileProg halArities prog
-      Just (pathT, _, _) = M.lookup "Path" cons
-      Just (handleT, _, _) = M.lookup "Handle" cons
 
   when dumpAsm $ do
     forM_ (M.toList bprog) $ \(n, fn) -> putStrLn (disasm n fn)
@@ -147,16 +152,16 @@ main = do
   let shapeNames = M.fromList [(tid, fields) | (fields, tid) <- M.toList shapes]
       consTV = M.map (\(t, v, _) -> (t, v)) cons
       dataFile = dropExtension path ++ ".soldata"
-  unless dumpAsm $ runTxLoop (takeDirectory path) dataFile consTV shapeNames bprog prog jc pathT handleT runList 0
+  unless dumpAsm $ runTxLoop (takeDirectory path) dataFile consTV shapeNames bprog prog jc cons runList 0
 
 -- run every `>` statement in order inside one transaction, then commit;
 -- on read-set conflict, reset and re-run the whole script
-runTxLoop :: FilePath -> FilePath -> M.Map Name (Int, Int) -> M.Map Int [Name] -> BProg -> Prog -> Maybe JitCtx -> Int -> Int -> [Name] -> Int -> IO ()
-runTxLoop base dataFile consTV shapeNames bprog core jc pathT handleT topNames attempt = do
+runTxLoop :: FilePath -> FilePath -> M.Map Name (Int, Int) -> M.Map Int [Name] -> BProg -> Prog -> Maybe JitCtx -> M.Map Name (Int, Int, Int) -> [Name] -> Int -> IO ()
+runTxLoop base dataFile consTV shapeNames bprog core jc cons topNames attempt = do
   tx <- newTx
   fuel <- newIORef fuelQuantum
   preempts <- newIORef 0
-  let env = VMEnv base dataFile consTV shapeNames bprog core jc (mkHal pathT handleT tx preempts) fuel preempts
+  let env = VMEnv base dataFile consTV shapeNames bprog core jc (mkHal cons tx preempts) fuel preempts
   forM_ topNames $ \n -> do
     v <- execFn env n []
     unless (isUnit v) $ putStrLn ("=> " ++ VM.render v)
@@ -176,7 +181,7 @@ runTxLoop base dataFile consTV shapeNames bprog core jc pathT handleT topNames a
           exitFailure
       | otherwise -> do
           putStrLn ("[sol] conflict on " ++ show stale ++ " — retrying (attempt " ++ show (attempt + 2) ++ ")")
-          runTxLoop base dataFile consTV shapeNames bprog core jc pathT handleT topNames (attempt + 1)
+          runTxLoop base dataFile consTV shapeNames bprog core jc cons topNames (attempt + 1)
 
 numberEvals :: [STop] -> ([STop], [Name])
 numberEvals tops = (map fst numbered, [n | (_, Just n) <- numbered])
@@ -237,3 +242,25 @@ expandUses depth prefix seenRef baseDir tops = do
   where
     notEval TEval {} = False
     notEval _ = True
+
+-- rewrite references through struct-targeted `Local = mod.Struct.` aliases
+aliasStructRefs :: [STop] -> [STop]
+aliasStructRefs tops
+  | M.null amap = tops
+  | otherwise = map top tops
+  where
+    structNames = S.fromList [n | TStruct n _ _ <- tops]
+    amap = M.fromList [(t, tgt) | TConAlias t tgt <- tops, S.member tgt structNames]
+    ren v = case M.lookup v amap of
+      Just tgt -> tgt
+      Nothing -> case break (== '.') v of
+        (h, '.' : rest) | Just tgt <- M.lookup h amap -> tgt ++ "." ++ rest
+        _ -> v
+    re bs = transformE (\_ e -> case e of SVar v -> SVar (ren v); _ -> e) bs
+    top = \case
+      TBind n ps g b ->
+        let (bs, g') = renGuards re id (S.fromList (concatMap patVars ps)) g
+         in TBind n ps g' (re bs b)
+      TEval e -> TEval (re S.empty e)
+      TStruct n sigs fs -> TStruct n sigs [(f, re S.empty e) | (f, e) <- fs]
+      other -> other

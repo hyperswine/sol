@@ -260,8 +260,8 @@ a non-transactional effect (like `print`): a retried parent re-runs it.
 
 Training loops forced the JIT's most useful extension yet: the PARTIAL
 APPLICATION tier. `Vec.fold (grad w1 w2 b) 0 v` captures the current
-weights; captured int args now ride into native code as leading i64
-params delivered through the driver's extras array — one compilation per
+weights; captured args now ride into native code as leading typed params
+(i64 or f64 bits) delivered through the driver's extras array — one compilation per
 fold serves every epoch and every parameter value ([jit] lines report
 "+ k captured scalar(s)"). Two rules this surfaced: (1) project the
 element record ONLY inside the scheme function — helpers take scalars;
@@ -292,9 +292,13 @@ tree degenerated, a nice case of the model debugging the data.
 ### Transactional filesystem + safe tool orchestration
 
 The script-session transaction now spans the whole filesystem, not just
-named-file reads/writes. New HAL ops (all accepting bare strings or
-@paths): rm, rmdir, mkdirp, ls, exists, isDir, stat — plus sh and shq for
-external tools. Every mutation is buffered in an ORDERED effect log and
+named-file reads/writes. The HAL surface is TWO functions — `read` and
+`write` — and everything else is prelude Sol over them: `mkdirp p = write
+p Dir`, `ls p = read (Ls p)`, `sh c = read (Sh c)`, `print v = write
+"/dev/out" v`, `mv` composes a read, a write, and an `Rm`. Structured `Io`
+values and device paths are decoded by the HAL inside the transaction; the
+linear handle quartet (open/readAll/writeAll/close) remains the separate
+linearity tier. Every mutation is buffered in an ORDERED effect log and
 applied atomically at commit; nothing touches disk mid-script. ls/exists/
 stat compose the disk state with the txn's own pending adds/removes, so
 the script always sees its own effects. Directory listings join the read
@@ -380,22 +384,40 @@ interpreter tier is for, and the whole pipeline is <100ms. The checks
 section is computed, not asserted: one-net-per-strip and jumpers ==
 strips-1 per net are verified from the final state.
 
-## Scientific computing on the JIT (Q16.16 fixed point)
+## Scientific computing: the Numeric datatype and the typed JIT tier
 
-The VM and JIT are integer-only, so numerics run in Q16.16 fixed point —
-the arithmetic an FPU-less FP-RISC target would use anyway. lib/fix.sol is
-the fixed-point library (fmul/fdiv/fabs plus an 18-iteration Newton fsqrt),
-written as ordinary arithmetic Sol: any element function that calls it
-pulls the whole library into its native closure via the module system.
+Sol has ONE number surface. `1 + 1` is exact bignum arithmetic and `/` on
+two Ints is quot, exactly as before; inexactness enters through
+`Numeric.div` (true division), `Numeric.sqrt`, or `Numeric.inexact`, and
+then PROPAGATES — any `+ - * <` touching an inexact value promotes,
+Julia-style, and a result that lands back on an integer renders as one.
+No float literals, no fixed-point library, no second set of operators
+(lib/fix.sol survives as a museum piece; nothing uses it).
 
-- examples/physics.sol — ballistics ensemble: N projectiles integrated by
-  semi-implicit Euler with QUADRATIC drag (a = -c|v|v), fix.fsqrt in the
-  hot loop, over SoA {vx, vy} columns. Verified against the closed form
-  R = 2 vx vy / g for the drag-free case (0.3% at dt = 0.01) and BIT-EXACT
-  against the interpreter. 40,000 trajectories in 2.3s JITted; the
-  interpreter needs 6.4s for 400 (~275x at scale).
-- examples/mandel.sol — Mandelbrot escape iteration per pixel over an
-  unboxed index column, ASCII-rendered; pixel-exact between tiers.
+The JIT follows the same philosophy as inference-as-optimization. A small
+type lattice — JI (provably Int), JD (provably inexact), JW (widened:
+could be either, stored promoted), JB (inference bottom) — types every
+fold/map closure per CALLSITE: helpers specialize per argument-type
+vector (linreg's epoch-1 gradient fold with int-zero weights and its
+later f64-weight fold are two native variants), KNum record fields live
+in unboxed f64 SoA columns next to i64 ones, captured inexact scalars
+ride as f64 bits in the extras array, and Num.div/sqrt/floor/round
+compile to fdiv and llvm.sqrt/floor/rint intrinsics (rint's nearest-even
+IS Haskell's `round`). The ONE operation where exact and inexact
+semantics diverge is division — so `/` over int-ambiguous (JW) operands
+bails to the interpreter, as does any JW value escaping native code, and
+everything that does compile is BIT-IDENTICAL to the interpreter
+(tests/compose/c10_typed_jit.sol locks this; 40 epochs of a 50k-row
+sqrt-fold: ~12s interpreted, ~0.3s native).
+
+- examples/physics.sol — ballistics ensemble: semi-implicit Euler with
+  QUADRATIC drag (a = -c|v|v), plain operators + Numeric.sqrt in the hot
+  loop. The recursive integrator compiles natively over the int launch
+  columns with f64 state, and the drag-free variant is asserted against
+  the closed form R = 2 vx vy / g. Bit-exact vs the interpreter.
+- examples/mandel.sol — Mandelbrot with plain complex-square arithmetic
+  on Numeric coordinates; the per-pixel escape map compiles natively;
+  pixel-exact between tiers.
 
 Getting here surfaced and fixed three JIT-tier gaps: (1) the clause
 compiler rebinds parameters (CLet p (CVar a1_k)), so the dual checker and
@@ -409,8 +431,11 @@ toward zero — the interpreter now uses `quot`, so all tiers (and the
 eventual metal) agree bit-for-bit on negative operands.
 
 Honesty notes: i64 overflow and division-by-zero inside native code are the
-programmer's problem (the interpreter is bignum and panics respectively) —
-keep |x| < ~20000.0 in Q16.16 and guard denominators, as lib/fix does.
+programmer's problem (the interpreter is bignum and panics respectively;
+native fdiv-by-zero yields inf where the interpreter panics — same stance).
+f64 comparisons against promoted ints are exact only within 2^53. Native
+recursion has no fuel CHECK (the cell only decrements), so a
+non-terminating element function hangs harder than interpreted code.
 SOL_JIT_DEBUG=1 explains any silent fallback to the interpreter.
 
 ## The linear SoA Vector
@@ -420,9 +445,11 @@ O(1)), O(1) random access, and **automatically SoA** — the layout is fixed
 by the first push:
 
 - a product value (record, tuple, single-variant data) decomposes into one
-  column per field: Int fields land in unboxed malloc'd i64 columns
-  (JIT-ready), everything else in boxed columns. `{age : Int, name :
-  String}` stores as an ages column + a names column.
+  column per field: Int fields land in unboxed malloc'd i64 columns,
+  inexact Numeric fields in unboxed f64 columns (both JIT-ready),
+  everything else in boxed columns. `{age : Int, name : String}` stores as
+  an ages column + a names column. Layouts print in [jit] lines as e.g.
+  r104:ddi — two f64 columns and an i64 one.
 - a plain Int gives a scalar unboxed column; anything else a scalar boxed
   column.
 

@@ -7,32 +7,33 @@
 # reproduced. Trees need lookahead (or luck) for XOR; that is the
 # algorithm, not the runtime.
 #
-# The hot part is split search: for each candidate (feature, threshold),
-# ONE JITted fold packs all four class counts (left/right x pos/neg) into
-# a single i64 base-1024, with (feat, thresh) riding as captured scalars —
-# one native compilation serves every candidate at every node. Tree
-# building, partitioning, and prediction are interpreted structure work
-# over a recursive ADT.
+# Numeric refactor: features, thresholds, and labels are plain Numerics
+# (labels stay the exact ints +1/-1); the packed base-1024 counting fold
+# is untouched int arithmetic — only the `xv < th` comparison touches the
+# inexact tier, and promotion handles it in place.
 
-fix = use "../lib/fix".
 rnd = use "../lib/rand".
+Rand = rnd.Rand.
 
 Tree = Type (Leaf x | Node a b c d). # Node feat thresh left right
 
+quarter = Numeric.div 1 4.
+minusHalf = 0 - Numeric.div 1 2.
+
 mkRow s =
-  sa = rnd.next s;
-  x1 = rnd.gauss4 sa;
-  sb = rnd.next4 sa;
-  x2 = rnd.gauss4 sb;
-  sc = rnd.next4 sb;
-  flip = rnd.uniform sc 20; # 5% label noise
-  ytrue = case x1 > 16384 of
-    False -> 0 - 65536
-  | True -> (case x2 > (0 - 32768) of True -> 65536 | False -> 0 - 65536);
+  sa = Rand.next s;
+  x1 = Rand.gauss4 sa;
+  sb = Rand.next4 sa;
+  x2 = Rand.gauss4 sb;
+  sc = Rand.next4 sb;
+  flip = Rand.uniform sc 20; # 5% label noise
+  ytrue = case x1 > quarter of
+    False -> 0 - 1
+  | True -> (case x2 > minusHalf of True -> 1 | False -> 0 - 1);
   {x1 = x1, x2 = x2, y = case flip == 0 of True -> 0 - ytrue | False -> ytrue}.
 
 fill v s k | k == 0 = v.
-fill v s k = fill (Vec.push (mkRow (rnd.next (s + k * 100003))) v) s (k - 1).
+fill v s k = fill (Vec.push (mkRow (Rand.next (s + k * 100003))) v) s (k - 1).
 
 imod a b = a - (a / b) * b.
 
@@ -69,7 +70,7 @@ scanStep c rest bf bt bs v =
   | False -> scan rest bf bt bs v2.
 
 grid k | k > 6 = [].
-grid k = (k * 16384) :: grid (k + 1). # -1.5 .. 1.5 step 0.25
+grid k = (k * quarter) :: grid (k + 1). # -1.5 .. 1.5 step 0.25
 
 cands1 f ts | ts == [] = [].
 cands1 f ts = case ts of t :: r -> (f, t) :: cands1 f r.
@@ -90,12 +91,9 @@ part feat th xs ls rs = case xs of
 buildVec [] v = v.
 buildVec (p :: r) v = buildVec r (Vec.push p v).
 
-listLen xs = List.fold len1 0 xs.
-len1 a x = a + 1.
+majorityLeaf n np = Leaf (case np * 2 >= n of True -> 1 | False -> 0 - 1).
 
-majorityLeaf n np = Leaf (case np * 2 >= n of True -> 65536 | False -> 0 - 65536).
-
-# recursive build: JITted scan for the split, interpreted partition
+# recursive build: packed-count scan for the split, interpreted partition
 build depth v =
   (n, v0) = Vec.len v;
   (np, v1) = Vec.fold posCnt 0 v0;
@@ -125,18 +123,23 @@ predict (Node f th l _) p | pick f p < th = predict l p.
 predict (Node _ _ _ r) p = predict r p.
 
 accGo _ [] k = k.
-accGo t (p :: r) k | fix.fmul (predict t p) p.y > 0 = accGo t r (k + 1).
+accGo t (p :: r) k | predict t p * p.y > 0 = accGo t r (k + 1).
 accGo t (_ :: r) k = accGo t r k.
 
-showT t = case t of
-  Leaf c -> "Leaf({fix.toMilli c})"
-| Node f th l r -> "Node(x{f} < {fix.toMilli th}: {showT l} | {showT r})".
+chkAtLeast name got want = case got >= want of
+  True -> print "ok {name} ({got} >= {want})"
+| False -> error "FAIL {name}: {got} < {want}".
 
-> n = 600;
+showT t = case t of
+  Leaf c -> "Leaf({c})"
+| Node f th l r -> "Node(x{f} < {th}: {showT l} | {showT r})".
+
+> n = 400;
   train_v = fill (Vec.new Unit) 13371337 n;
   tree = build 2 train_v;
   u0 = print "tree: {showT tree}";
-  test_v = fill (Vec.new Unit) 55667788 300;
+  test_v = fill (Vec.new Unit) 55667788 200;
   xs = Vec.toList test_v;
   acc = accGo tree xs 0;
-  print "test accuracy: {acc * 100 / 300}% (5% label noise ceiling ~95%)".
+  u1 = print "test accuracy: {acc * 100 / 200}% (5% label noise ceiling ~95%)";
+  chkAtLeast "test accuracy %" (acc * 100 / 200) 85.

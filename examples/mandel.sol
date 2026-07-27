@@ -1,34 +1,34 @@
-# mandel.sol — Mandelbrot in Q16.16 fixed point. Per-pixel escape iteration
-# is embarrassingly parallel: Vec.map over pixel indices, the complex-square
-# recursion JIT-compiled with fix.fmul in its closure, running on the
-# unboxed column. Rendering is interpreted string work, kept separate.
+# mandel.sol — Mandelbrot on the Numeric datatype. Coordinates are inexact
+# Numerics born from Numeric.div; the escape iteration uses plain *, +, >
+# throughout — promotion carries inexactness, escape counts stay Ints.
+# (The former Q16.16 version is gone: no fix library, no manual scaling.)
+#
+# JIT note: the typed tier compiles the per-pixel map natively — the
+# complex-square recursion specializes per callsite (int seed iteration
+# widening into f64 state), with the inexact plane constants folded in as
+# f64 CAFs — and the all-int escape counts take the i64 fold unchanged.
 
-# IDEALLY: use the builtin Numeric datatype and infer the fixed point float type as an optimization julia-style
-# rather than fix
+w = 96.
+h = 36.
+maxIter = 80.
 
-fix = use "../lib/fix".
+xmin = 0 - Numeric.div 2213 1000.  # -2.213 .. 0.787
+xspan = 3.
+ymin = 0 - Numeric.div 12 10.      # -1.2 .. 1.2
+yspan = Numeric.div 24 10.
 
-w = 110.
-h = 40.
-maxIter = 96.
-
-xmin = 0 - 145000.   # -2.213 .. 0.787
-xspan = 196608.      # 3.0
-ymin = 0 - 78643.    # -1.2 .. 1.2
-yspan = 157286.      # 2.4
-
-dx = fix.fdiv xspan (fix.fromInt w).
-dy = fix.fdiv yspan (fix.fromInt h).
+dx = Numeric.div xspan w.
+dy = Numeric.div yspan h.
 
 imod a b = a - (a / b) * b.
 
 mand cr ci zr zi k | k == 0 = 0.
 mand cr ci zr zi k =
-  r2 = fix.fmul zr zr;
-  i2 = fix.fmul zi zi;
-  case r2 + i2 > 262144 of
+  r2 = zr * zr;
+  i2 = zi * zi;
+  case r2 + i2 > 4 of
     True -> k
-  | False -> mand cr ci (r2 - i2 + cr) (2 * fix.fmul zr zi + ci) (k - 1).
+  | False -> mand cr ci (r2 - i2 + cr) (2 * zr * zi + ci) (k - 1).
 
 pix i =
   col = imod (i - 1) w;
@@ -42,7 +42,7 @@ plus a b = a + b.
 palette = ["@", "#", "*", "+", "=", "-", ":", ".", " "].
 charFor c = case c == 0 of
   True -> "@"
-| False -> palette ! (case c / 12 + 1 > 9 of True -> 9 | False -> c / 12 + 1).
+| False -> palette ! (case c / 10 + 1 > 9 of True -> 9 | False -> c / 10 + 1).
 
 rowStr cs | cs == [] = "".
 rowStr cs = case cs of c :: r -> "{charFor c}{rowStr r}".
