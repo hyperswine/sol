@@ -18,6 +18,7 @@ zip -r "$ARCHIVE_NAME" . \
   -x "dist-newstyle/*" \
   -x "*/dist-newstyle/*" \
   -x "dist-newstyle" \
-  -x "bin/*"
+  -x "bin/*" \
+  -x ".git/*"
 
 echo "✓ Created $ARCHIVE_NAME"
