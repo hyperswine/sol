@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-missing-export-lists #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
@@ -884,10 +885,12 @@ compileScheme jc prog scheme root elemTy accTy0 = do
                     sigs' = M.insert rootKey retTy sigs
                 emit jc closure sigs' allKeys rootKey $ \cg md ptrTy sym -> do
                   buildDriverT cg md ptrTy scheme sym (cgFns cg M.! rootKey) elemTy accTy retTy
-                  pure (\addr -> do
-                    putStrLn ("[jit] compiled " ++ scheme ++ "<" ++ root ++ "> elem=" ++ [tyChar elemTy] ++ (if isFold then " acc=" ++ [tyChar accTy] else "") ++ " (typed, fuel reified)")
-                    atomicModifyIORef' (jcCache jc) (\m -> (M.insert ckey (addr, accTy, retTy) m, ()))
-                    pure (addr, accTy, retTy))
+                  pure
+                    ( \addr -> do
+                        putStrLn ("[jit] compiled " ++ scheme ++ "<" ++ root ++ "> elem=" ++ [tyChar elemTy] ++ (if isFold then " acc=" ++ [tyChar accTy] else "") ++ " (typed, fuel reified)")
+                        atomicModifyIORef' (jcCache jc) (\m -> (M.insert ckey (addr, accTy, retTy) m, ()))
+                        pure (addr, accTy, retTy)
+                    )
 
 -- shared LLVM module scaffolding: declare + define every demanded variant,
 -- run the driver builder, hand the module to the JIT, look the symbol up
@@ -1142,10 +1145,12 @@ compileVecScheme jc prog scheme root scalar colTys laySig exTys accTy0 = do
                     rv <- coerce cg rres retTy
                     _ <- c_bRet (cgB cg) rv
                     buildVecDriverT cg md ptrTy scheme sym (dual, dualTy) exTys accTy retTy
-                    pure (\addr -> do
-                      putStrLn ("[jit] compiled " ++ scheme ++ "<" ++ root ++ "> over SoA layout " ++ laySig ++ (if nEx > 0 then " + " ++ show nEx ++ " captured scalar(s)" else "") ++ " (typed dual, fuel reified)")
-                      atomicModifyIORef' (jcCache jc) (\m -> (M.insert ckey (addr, accTy, retTy) m, ()))
-                      pure (addr, accTy, retTy))
+                    pure
+                      ( \addr -> do
+                          putStrLn ("[jit] compiled " ++ scheme ++ "<" ++ root ++ "> over SoA layout " ++ laySig ++ (if nEx > 0 then " + " ++ show nEx ++ " captured scalar(s)" else "") ++ " (typed dual, fuel reified)")
+                          atomicModifyIORef' (jcCache jc) (\m -> (M.insert ckey (addr, accTy, retTy) m, ()))
+                          pure (addr, accTy, retTy)
+                      )
                   pure r
 
 -- typed vec driver: extras load as i64 bits and bitcast per their type;
