@@ -17,6 +17,7 @@ echo "Excluding: dist-newstyle/"
 zip -r "$ARCHIVE_NAME" . \
   -x "dist-newstyle/*" \
   -x "*/dist-newstyle/*" \
-  -x "dist-newstyle"
+  -x "dist-newstyle" \
+  -x "bin/*"
 
 echo "✓ Created $ARCHIVE_NAME"

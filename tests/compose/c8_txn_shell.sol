@@ -10,5 +10,4 @@ chk name got want = case got == want of True -> print "ok {name}" | False -> err
 > (rc, out) = sh "echo hi";
   chk "sh exit code" rc 0.
 > (rc, out) = sh "echo hi";
-  chk "sh query output" out "hi
-".
+  chk "sh query output" out "hi".
