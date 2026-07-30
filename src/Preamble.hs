@@ -21,7 +21,12 @@ prelude =
       -- carry their path/command and are read FROM. Everything below the
       -- handle quartet is ordinary Sol code over read/write — the HAL's
       -- whole outside-world surface is those two symbols plus the handles.
-      "Io = Type (Dir | Rm | RmDir | Ls x | Stat x | Exists x | IsDir x | Sh x).",
+      -- Now* are the REALTIME intents: they leave the transaction. They are
+      -- spelled separately from their transactional twins on purpose, so a
+      -- reader can see at the call site that atomicity was given up, and so
+      -- the compiler can count them and say so.
+      "Io = Type (Dir | Rm | RmDir | Ls x | Stat x | Exists x | IsDir x | Sh x",
+      "         | Now x | NowSet x | NowAdd x | NowSh x | NowLine).",
       "open : String -> Handle.",
       "readAll : Handle -> (String, Handle).",
       "writeAll : Handle -> String -> Handle.",
@@ -42,6 +47,38 @@ prelude =
       "input u = read \"/dev/in\".",
       "sleepMs n = write \"/dev/clock\" n.",
       "fuelPreempts u = read \"/dev/fuel\".",
+      -- ---- realtime escapes: NOT the default, see Txn.hs ----
+      -- readNow   : re-reads the disk, so a poll loop can observe change
+      -- writeNow  : lands on disk immediately, survives a rollback
+      -- appendNow : same, appending — progress logs you can tail
+      -- shNow     : streams a command's output live, returns the exit code
+      -- readLineNow : one line of stdin, now, for prompts
+      -- Transactional twins to prefer: readPath, writePath, sh/shq, input.
+      -- ---- BStr: the fast byte-buffer string variant ----
+      -- Declared LINEAR (BStr 1) for the same reason Vector is: in-place
+      -- mutation is only sound when there's exactly one owner. Every op
+      -- threads the buffer and returns it; BStr.toStr consumes it.
+      -- Use for: append-heavy builders, index-heavy scanning, any string
+      -- work that scales with input size rather than staying tiny.
+      -- Use VStr (the default) for: filenames, status text, numbers, anything
+      -- short that you build once and read a few times.
+      "BStr 1 = Type (BStr Int).",
+      "BStr.new : Unit -> BStr.",
+      "BStr.fromStr : String -> BStr.",
+      "BStr.toStr : BStr -> String.",
+      "BStr.append : String -> BStr -> BStr.",
+      "BStr.cat : a -> a -> a.",
+      -- Interrogation THREADS the buffer, exactly like Vec.len / Vec.get:
+      -- a linear value must be handed back or it cannot be used again.
+      "BStr.len : BStr -> (Int, BStr).",
+      "BStr.at : BStr -> Int -> (Int, BStr).",
+      "BStr.sub : BStr -> Int -> Int -> (BStr, BStr).",
+      "BStr.free : BStr -> Unit.",
+      "readNow p = read (Now p).",
+      "writeNow p s = write p (NowSet s).",
+      "appendNow p s = write p (NowAdd s).",
+      "shNow c = read (NowSh c).",
+      "readLineNow u = read NowLine.",
       "Vector 1 = Type (Vector Int).",
       "Vec.new : Unit -> Vector.",
       "Vec.push : a -> Vector -> Vector.",
@@ -123,6 +160,9 @@ halArities =
     [ ("str", 1), ("strcat", 2), ("String.len", 1), ("strlen", 1),
       ("error", 1), ("parseInt", 1), ("charAt", 2), ("chr", 1), ("!", 2),
       ("open", 1), ("readAll", 1), ("writeAll", 2), ("close", 1),
+      ("BStr.new", 1), ("BStr.fromStr", 1), ("BStr.toStr", 1),
+      ("BStr.append", 2), ("BStr.cat", 2), ("BStr.len", 1),
+      ("BStr.at", 2), ("BStr.sub", 3), ("BStr.free", 1),
       ("read", 1), ("write", 2),
       ("Num.div", 2), ("Num.sqrt", 1), ("Num.floor", 1), ("Num.round", 1),
       ("map", 2), ("filter", 2), ("foldl", 3),

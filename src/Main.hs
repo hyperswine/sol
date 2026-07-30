@@ -16,7 +16,7 @@ import Bytecode
 import Control.Monad (forM, forM_, unless, when)
 import Control.Monad.State.Strict (runState)
 import Data.IORef
-import Data.List (isPrefixOf)
+import Data.List (intercalate, isPrefixOf)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Lang
@@ -111,6 +111,17 @@ main = do
     mapM_ (putStrLn . ("  * " ++)) structErrs2
     exitFailure
 
+  -- realtime escapes are opt-in and loud: report every use site's NAME and
+  -- count before the script runs, with the transactional alternative. The
+  -- prelude's own five wrapper definitions are skipped (they are the
+  -- plumbing, not a use).
+  let rtUses = scanRealtime allX
+  unless (M.null rtUses) $ do
+    putStrLn ("=== REALTIME ESCAPES: " ++ show (sum (M.elems rtUses)) ++ " use(s) ===")
+    forM_ (M.toList rtUses) $ \(n, c) ->
+      putStrLn ("  " ++ n ++ " x" ++ show c ++ "  — " ++ rtWhy n)
+    putStrLn "  this script is NOT atomic with respect to those paths/commands"
+
   -- `> expr.` becomes an anonymous zero-arg binding, run in file order
   -- (prelude has no evals, so numbering over the combined list is identical)
   let (tops, evalNames) = numberEvals allX
@@ -152,16 +163,17 @@ main = do
   let shapeNames = M.fromList [(tid, fields) | (fields, tid) <- M.toList shapes]
       consTV = M.map (\(t, v, _) -> (t, v)) cons
       dataFile = dropExtension path ++ ".soldata"
-  unless dumpAsm $ runTxLoop (takeDirectory path) dataFile consTV shapeNames bprog prog jc cons runList 0
+  rt <- newRtCounts
+  unless dumpAsm $ runTxLoop (takeDirectory path) dataFile consTV shapeNames bprog prog jc cons runList rt 0
 
 -- run every `>` statement in order inside one transaction, then commit;
 -- on read-set conflict, reset and re-run the whole script
-runTxLoop :: FilePath -> FilePath -> M.Map Name (Int, Int) -> M.Map Int [Name] -> BProg -> Prog -> Maybe JitCtx -> M.Map Name (Int, Int, Int) -> [Name] -> Int -> IO ()
-runTxLoop base dataFile consTV shapeNames bprog core jc cons topNames attempt = do
+runTxLoop :: FilePath -> FilePath -> M.Map Name (Int, Int) -> M.Map Int [Name] -> BProg -> Prog -> Maybe JitCtx -> M.Map Name (Int, Int, Int) -> [Name] -> RtCounts -> Int -> IO ()
+runTxLoop base dataFile consTV shapeNames bprog core jc cons topNames rt attempt = do
   tx <- newTx
   fuel <- newIORef fuelQuantum
   preempts <- newIORef 0
-  let env = VMEnv base dataFile consTV shapeNames bprog core jc (mkHal cons tx preempts) fuel preempts
+  let env = VMEnv base dataFile consTV shapeNames bprog core jc (mkHal cons tx preempts rt) fuel preempts
   forM_ topNames $ \n -> do
     v <- execFn env n []
     unless (isUnit v) $ putStrLn ("=> " ++ VM.render v)
@@ -172,16 +184,22 @@ runTxLoop base dataFile consTV shapeNames bprog core jc cons topNames attempt = 
       then pure (Conflict ["<forced>"]) -- discard this attempt's effects
       else commit tx
   case res of
-    Committed n
-      | n > 0 -> putStrLn ("[sol] committed " ++ show n ++ " file(s) atomically")
-      | otherwise -> pure ()
+    Committed n -> do
+      when (n > 0) $ putStrLn ("[sol] committed " ++ show n ++ " file(s) atomically")
+      -- if the run left the transaction at any point, say so plainly: the
+      -- word "atomically" above is only true of the file set it names
+      total <- rtTotal rt
+      when (total > 0) $ do
+        kinds <- rtReport rt
+        putStrLn ("[sol] NOT atomic overall: " ++ show total
+                    ++ " realtime escape(s) — " ++ intercalate ", " kinds)
     Conflict stale
       | attempt + 1 >= maxRetries -> do
           putStrLn ("[sol] giving up after " ++ show maxRetries ++ " attempts (conflicts on " ++ show stale ++ ")")
           exitFailure
       | otherwise -> do
           putStrLn ("[sol] conflict on " ++ show stale ++ " — retrying (attempt " ++ show (attempt + 2) ++ ")")
-          runTxLoop base dataFile consTV shapeNames bprog core jc cons topNames (attempt + 1)
+          runTxLoop base dataFile consTV shapeNames bprog core jc cons topNames rt (attempt + 1)
 
 numberEvals :: [STop] -> ([STop], [Name])
 numberEvals tops = (map fst numbered, [n | (_, Just n) <- numbered])
@@ -264,3 +282,77 @@ aliasStructRefs tops
       TEval e -> TEval (re S.empty e)
       TStruct n sigs fs -> TStruct n sigs [(f, re S.empty e) | (f, e) <- fs]
       other -> other
+
+-- ---- realtime escape reporting --------------------------------------------
+
+realtimeNames :: [Name]
+realtimeNames = ["readNow", "writeNow", "appendNow", "shNow", "readLineNow"]
+
+rtWhy :: Name -> String
+rtWhy "readNow" = "re-reads the disk, not snapshotted, not validated at commit (transactional: readPath)"
+rtWhy "writeNow" = "hits the disk before commit and survives a rollback (transactional: writePath)"
+rtWhy "appendNow" = "appends before commit and survives a rollback (transactional: writePath)"
+rtWhy "shNow" = "streams a command live and re-runs on every retry (transactional: shq)"
+rtWhy "readLineNow" = "reads stdin now and re-reads on retry (transactional: input)"
+rtWhy n = n
+
+-- Count realtime uses in code this run can actually REACH.
+--
+-- Reachability matters because `use` splices a whole module in: a library
+-- with one realtime helper would otherwise make every importer report an
+-- escape it never performs, and a warning you learn to ignore is worse than
+-- no warning. Roots are the `>` statements plus a zero-arg `main`; from
+-- there we follow references. The five prelude wrappers that DEFINE the
+-- escapes are not themselves counted as uses.
+scanRealtime :: [STop] -> M.Map Name Int
+scanRealtime tops =
+  M.filterWithKey (\k _ -> k `elem` realtimeNames) $
+    M.fromListWith (+) [(n, 1 :: Int) | (owner, n) <- uses, owner `S.member` live]
+  where
+    -- name -> body references, for every binding
+    refs = M.fromListWith (++) [(n, topVars t) | t@(TBind n _ _ _) <- tops]
+    structRefs = M.fromListWith (++) [(n, topVars t) | t@(TStruct n _ _) <- tops]
+    allRefs = M.unionWith (++) refs structRefs
+    rootNames = concat [topVars t | t@(TEval _) <- tops] ++ ["main"]
+    live = S.insert "<eval>" (grow (S.fromList rootNames) rootNames)
+    grow seen [] = seen
+    grow seen (n : rest) =
+      let next = [m | m <- M.findWithDefault [] n allRefs, not (m `S.member` seen)]
+       in grow (foldr S.insert seen next) (next ++ rest)
+    -- (enclosing binding, referenced name); `> ...` bodies are always live
+    uses =
+      [("<eval>", n) | t@(TEval _) <- tops, n <- topVars t]
+        ++ [ (owner, n)
+             | t <- tops,
+               Just owner <- [ownerOf t],
+               not (owner `elem` realtimeNames),
+               n <- topVars t
+           ]
+    ownerOf (TBind n _ _ _) = Just n
+    ownerOf (TStruct n _ _) = Just n
+    ownerOf _ = Nothing
+
+topVars :: STop -> [Name]
+topVars (TBind _ _ gs e) = concatMap exprVars (e : guardExprs gs)
+topVars (TEval e) = exprVars e
+topVars (TStruct _ _ fs) = concatMap (exprVars . snd) fs
+topVars _ = []
+
+exprVars :: SExpr -> [Name]
+exprVars = go
+  where
+    go (SVar n) = [n]
+    go (SApp a b) = go a ++ go b
+    go (SLam _ b) = go b
+    go (SBlock ss b) = concatMap stmt ss ++ go b
+    go (SCase s alts) = go s ++ concatMap (go . snd) alts
+    go (SBin _ a b) = go a ++ go b
+    go (SProj e _) = go e
+    go (SRec fs) = concatMap (go . snd) fs
+    go (SUpd e fs) = go e ++ concatMap (go . snd) fs
+    go (STup es) = concatMap go es
+    go (SList es) = concatMap go es
+    go (SStrI segs) = concat [go e | SegExpr e <- segs]
+    go _ = []
+    stmt (SBind _ _ e) = go e
+    stmt (SBindPat _ e) = go e

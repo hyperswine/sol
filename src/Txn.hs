@@ -45,7 +45,8 @@ import System.Directory
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import System.Exit (ExitCode (..))
 import System.IO (readFile')
-import System.Process (readCreateProcessWithExitCode, shell)
+import System.IO (hFlush, hIsEOF, hGetLine, stderr, stdin, stdout, hPutStrLn)
+import System.Process (createProcess, readCreateProcessWithExitCode, shell, waitForProcess)
 
 -- The transaction's pending effect on the world, IN DECLARATION ORDER.
 -- File writes, removals, mkdirs, and QUEUED external commands interleave
@@ -223,6 +224,94 @@ txSh cmd = do
 -- On retry the queue is discarded: the world was never touched.
 txShq :: IORef TxState -> String -> IO ()
 txShq ref cmd = pushEffect ref (EShell cmd)
+
+-- ---- REALTIME ESCAPES (outside the transaction) ---------------------------
+--
+-- Everything above this line is transactional: reads snapshot, writes buffer,
+-- and a validation failure re-runs the script with the world untouched. That
+-- is the default and it is what you want almost always.
+--
+-- These are the deliberate holes in it. They exist because three things are
+-- genuinely impossible inside a transaction:
+--
+--   * OBSERVING CHANGE. A transactional read is idempotent by construction —
+--     the second `read p` returns the first read's snapshot. A poll/watch/tail
+--     loop can therefore never see a file change. rtRead re-reads the disk.
+--   * STREAMING OUTPUT. `sh` captures a command's output and hands it back
+--     when the command is done, so a four-minute build shows nothing until
+--     it finishes. rtShell inherits stdio so the output arrives live.
+--   * PROMPTING. `input` slurps all of stdin at once; a prompt loop needs a
+--     line at a time, now.
+--
+-- What you give up, in every case: the operation happens even if the
+-- transaction later rolls back, it happens AGAIN on every retry, and its
+-- result is not validated at commit. The counter below exists so a run that
+-- uses these says so out loud.
+
+-- per-kind use counts, for the warning summary; survives retries
+type RtCounts = IORef (M.Map String Int)
+
+newRtCounts :: IO RtCounts
+newRtCounts = newIORef M.empty
+
+-- bump, and on FIRST use of a kind explain what was given up
+noteEscape :: RtCounts -> String -> String -> IO ()
+noteEscape ref kind why = do
+  m <- readIORef ref
+  when (not (M.member kind m)) $
+    hPutStrLn stderr ("[sol] REALTIME: " ++ kind ++ " — " ++ why)
+  atomicModifyIORef' ref (\mm -> (M.insertWith (+) kind 1 mm, ()))
+
+rtTotal :: RtCounts -> IO Int
+rtTotal ref = sum . M.elems <$> readIORef ref
+
+rtReport :: RtCounts -> IO [String]
+rtReport ref = do
+  m <- readIORef ref
+  pure [k ++ " x" ++ show n | (k, n) <- M.toList m]
+
+-- A realtime write steps outside the transaction for that path, so the
+-- transaction must stop making claims about it: drop any snapshot we took.
+-- Without this, `s = readPath p; u = appendNow p line` would invalidate its
+-- own read set and retry forever. Returns True if a claim was actually
+-- dropped, so the caller can say so.
+txForget :: IORef TxState -> FilePath -> IO Bool
+txForget ref p = atomicModifyIORef' ref $ \s ->
+  ( s { txReads = M.delete p (txReads s), txView = M.delete p (txView s) },
+    M.member p (txReads s) || M.member p (txView s)
+  )
+
+-- read the disk NOW, with no snapshot: repeated calls can differ
+rtRead :: FilePath -> IO (Maybe String)
+rtRead = diskRead
+
+rtWrite :: IORef TxState -> FilePath -> String -> IO Bool
+rtWrite ref p v = do
+  dropped <- txForget ref p
+  writeFile p v
+  pure dropped
+
+rtAppend :: IORef TxState -> FilePath -> String -> IO Bool
+rtAppend ref p v = do
+  dropped <- txForget ref p
+  appendFile p v
+  pure dropped
+
+-- inherit stdio so output streams to the terminal as it is produced;
+-- only the exit code comes back
+rtShell :: String -> IO Int
+rtShell cmd = do
+  hFlush stdout
+  (_, _, _, ph) <- createProcess (shell cmd)
+  code <- waitForProcess ph
+  pure (case code of ExitSuccess -> 0; ExitFailure n -> n)
+
+-- one line from stdin, now; "" at end of input
+rtLine :: IO String
+rtLine = do
+  hFlush stdout
+  eof <- hIsEOF stdin
+  if eof then pure "" else hGetLine stdin
 
 -- ---- commit protocol ------------------------------------------------------
 

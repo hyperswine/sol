@@ -29,10 +29,13 @@ import Data.Array.IO (IOArray, getElems, newArray_, readArray, writeArray)
 import Data.IORef
 import Data.Int (Int64)
 import Data.List (intercalate)
+import System.IO.Unsafe (unsafePerformIO)
 import Foreign.ForeignPtr (ForeignPtr, mallocForeignPtrArray, withForeignPtr)
 import Foreign.Marshal.Array (withArray)
 import Foreign.Ptr (Ptr, nullPtr, castPtr)
 import Foreign.Storable (peekElemOff, pokeElemOff)
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.UTF8 as BSU
 
 boolT, listT, atomT :: Int
 boolT = 1
@@ -43,6 +46,26 @@ data Value
   = VInt !Integer
   | VNum !Double -- inexact Numeric: arises from Num.div/Num.sqrt etc.; VInt promotes into it on contact
   | VStr String
+  -- ---- the fast string variant: a VStr backed by a mutable ByteString buffer
+  --
+  -- VStr is Haskell [Char]: O(i) at, O(|a|) strcat, O(n) length. That is fine
+  -- for the short strings Sol manipulates as values (filenames, status lines,
+  -- formatted numbers). It is NOT fine for:
+  --   * append-heavy builders — a log loop doing `acc = "{acc}{line}"` is
+  --     quadratic in the number of lines
+  --   * index-heavy scanning — substr/charAt over a multi-KB file is O(i) per
+  --     access; a grep loop over 1000 lines is O(n^2)
+  -- VBStr (ByteString Vector String) is the escape: a mutable byte buffer with
+  -- O(1) amortised append and O(1) byte access, declared LINEAR in the
+  -- prelude so in-place mutation is sound (same guarantee as Vector). UTF-8
+  -- decoding is exposed as codepoint (not byte) access — Sol's charAt contract
+  -- is preserved — using the BSU.decode loop only when the character boundary
+  -- doesn't land on a 7-bit ASCII byte.
+  --
+  -- Haskell String and VBStr are INTEROPERABLE: all builtins accept either
+  -- (vsStr extracts a Haskell String from either), so existing code that mixes
+  -- VStr results from system calls with VBStr buffers is not a type error.
+  | VBStr (IORef BStrStore)
   | VData !Int !Int [Value]
   | VPap String [Value] !Int -- global or HAL symbol, collected args, remaining
   | VVec (IORef VecStore) -- the linear SoA vector
@@ -69,6 +92,12 @@ veq (VNum a) (VNum b) = a == b
 veq (VInt a) (VNum b) = fromIntegral a == b -- Numeric: 1 == 1.0
 veq (VNum a) (VInt b) = a == fromIntegral b
 veq (VStr a) (VStr b) = a == b
+veq (VBStr ra) (VBStr rb) = unsafePerformIO $ do
+  a <- bsContent ra; b <- bsContent rb; pure (a == b)
+veq (VStr a) (VBStr rb) = unsafePerformIO $ do
+  b <- bsContent rb; pure (a == b)
+veq (VBStr ra) (VStr b) = unsafePerformIO $ do
+  a <- bsContent ra; pure (a == b)
 veq (VData t v fs) (VData t' v' fs') =
   t == t' && v == v' && length fs == length fs' && and (zipWith veq fs fs')
 veq _ _ = False
@@ -77,6 +106,7 @@ render :: Value -> String
 render (VInt i) = show i
 render (VNum d) = renderNum d
 render (VStr s) = s
+render (VBStr r) = unsafePerformIO (bsContent r)
 render v@(VData t 1 [_, _]) | t == listT = "[" ++ intercalate ", " (renderList v) ++ "]"
   where
     renderList (VData _ 1 [y, r]) = render y : renderList r
@@ -94,6 +124,118 @@ render (VVec _) = "<vector>"
 render (VMod p h) = "<module " ++ p ++ "#" ++ take 8 h ++ "...>"
 
 -- ---- the SoA store ----------------------------------------------------------
+
+-- ---- the mutable byte buffer for VBStr -----------------------------------
+-- A simple gap-free buffer: [Char] is the encoding layer (UTF-8 <-> codepoints),
+-- ByteString is the storage (contiguous bytes, no pointer indirection per char).
+-- Append is amortised O(1) by doubling. Random codepoint access is O(1) for
+-- ASCII-only content and O(i) worst-case for fully multibyte, with a fast path
+-- that checks whether the i-th byte is a leading byte before doing the full
+-- decode walk. Content interrogation always re-encodes to String for API
+-- compatibility; the hot path avoids that via the direct BS ops (bsLen, bsAt,
+-- bsAppend).
+
+data BStrStore = BStrStore
+  { bsCap  :: !Int          -- allocated bytes
+  , bsUsed :: !Int          -- used bytes (NOT codepoints)
+  , bsBuf  :: !BS.ByteString -- the content (first bsUsed bytes are live)
+  }
+
+initialBsCap :: Int
+initialBsCap = 64
+
+newBStr :: IO Value
+newBStr = VBStr <$> newIORef (BStrStore initialBsCap 0 (BS.replicate initialBsCap 0))
+
+-- allocate a VBStr from an existing Haskell String
+bstrFromString :: String -> IO Value
+bstrFromString s = do
+  let bs = BSU.fromString s
+      n  = BS.length bs
+      cap = max initialBsCap (nextPow2 n)
+      -- pad to capacity so we can append in-place
+      buf = bs <> BS.replicate (cap - n) 0
+  VBStr <$> newIORef (BStrStore cap n buf)
+  where
+    nextPow2 x = head (dropWhile (< x) (iterate (* 2) initialBsCap))
+
+-- decode back to Haskell String for API compat; O(n) but rarely needed
+bsContent :: IORef BStrStore -> IO String
+bsContent ref = do
+  st <- readIORef ref
+  pure (BSU.toString (BS.take (bsUsed st) (bsBuf st)))
+
+-- number of BYTES (fast)
+bsByteLen :: IORef BStrStore -> IO Int
+bsByteLen ref = bsUsed <$> readIORef ref
+
+-- number of UTF-8 codepoints; O(n) but cached at the Sol level via BStr.len
+bsCpLen :: IORef BStrStore -> IO Int
+bsCpLen ref = do
+  st <- readIORef ref
+  pure (BSU.length (BS.take (bsUsed st) (bsBuf st)))
+
+-- 0-based codepoint access; O(i) worst-case, O(1) for ASCII
+bsCpAt :: IORef BStrStore -> Int -> IO Int
+bsCpAt ref i = do
+  st <- readIORef ref
+  let live = BS.take (bsUsed st) (bsBuf st)
+  case BSU.decode (BS.drop (cpOffset live i) live) of
+    Just (c, _) -> pure (fromEnum c)
+    Nothing     -> ioError (userError ("BStr.at: index " ++ show (i+1) ++ " out of range"))
+  where
+    -- skip i codepoints from the start of bs; pure byte offset
+    cpOffset bs 0 = 0
+    cpOffset bs n = case BSU.decode bs of
+      Just (_, k) -> k + cpOffset (BS.drop k bs) (n - 1)
+      Nothing     -> BS.length bs -- exhausted
+
+-- amortised O(1) append of a Haskell String
+bsAppendStr :: IORef BStrStore -> String -> IO ()
+bsAppendStr ref s = do
+  let new = BSU.fromString s
+      nlen = BS.length new
+  st <- readIORef ref
+  let need = bsUsed st + nlen
+  st' <- if need > bsCap st
+           then do
+             let cap' = max (bsCap st * 2) need
+                 buf' = BS.take (bsUsed st) (bsBuf st)
+                     <> new
+                     <> BS.replicate (cap' - need) 0
+             pure st { bsCap = cap', bsUsed = need, bsBuf = buf' }
+           else do
+             let buf' = BS.take (bsUsed st) (bsBuf st)
+                     <> new
+                     <> BS.drop need (bsBuf st)
+             pure st { bsUsed = need, bsBuf = buf' }
+  writeIORef ref st'
+
+-- concatenate two VBStr/VStr values; always returns a VBStr
+bsConcat :: Value -> Value -> IO Value
+bsConcat (VBStr ra) (VBStr rb) = do
+  a <- bsContent ra; b <- bsContent rb
+  bstrFromString (a ++ b)
+bsConcat (VBStr ra) (VStr b) = do
+  a <- bsContent ra
+  bstrFromString (a ++ b)
+bsConcat (VStr a) (VBStr rb) = do
+  b <- bsContent rb
+  bstrFromString (a ++ b)
+bsConcat (VStr a) (VStr b) = bstrFromString (a ++ b)
+bsConcat a b = ioError (userError ("BStr.cat: not strings: " ++ render a ++ ", " ++ render b))
+
+-- extract a Haskell String from EITHER VStr or VBStr
+vsStr :: Value -> IO String
+vsStr (VStr s) = pure s
+vsStr (VBStr r) = bsContent r
+vsStr v = ioError (userError ("string op: not a string: " ++ render v))
+
+-- is a Value any string variant?
+isStrVal :: Value -> Bool
+isStrVal (VStr _) = True
+isStrVal (VBStr _) = True
+isStrVal _ = False
 
 data ColKind = KInt | KNum | KBox deriving (Eq)
 

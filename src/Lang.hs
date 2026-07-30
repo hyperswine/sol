@@ -203,7 +203,7 @@ expr :: P SExpr
 expr = lamE <|> opExpr
   where
     lamE = do
-      _ <- symbol "fn"
+      keyword "fn"
       ps <- some lowerName
       _ <- symbol "->"
       SLam ps <$> expr
@@ -218,7 +218,7 @@ opExpr = dollarChain
     pipeChain = chainl1' pipeOperand pipeOp
     pipeOperand =
       ( do
-          _ <- symbol "fn"
+          keyword "fn"
           ps <- some lowerName
           _ <- symbol "->"
           SLam ps <$> expr
@@ -350,9 +350,9 @@ recordish = braces (try litRec <|> updRec)
 
 caseE :: P SExpr
 caseE = do
-  _ <- symbol "case"
+  keyword "case"
   scrut <- expr
-  _ <- symbol "of"
+  keyword "of"
   arms <- arm `sepBy1` pipeSep
   pure (SCase scrut arms)
   where
@@ -549,7 +549,7 @@ typeDecl = do
   mult <- optional integer
   params <- many lowerName
   eqSign
-  _ <- symbol "Type"
+  keyword "Type"
   cons <-
     parens (conDecl `sepBy1` pipeSep)
       <|> newtypeCon n

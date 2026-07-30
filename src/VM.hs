@@ -27,6 +27,7 @@ import Lang (Name)
 import qualified Lang
 import Control.Concurrent (threadDelay)
 import Data.Int (Int64)
+import qualified Data.IntMap.Strict as IM
 import Foreign.Marshal.Alloc (alloca)
 import Foreign.Ptr (Ptr)
 import Foreign.Storable (peek, poke)
@@ -35,9 +36,12 @@ import System.IO.Unsafe (unsafePerformIO)
 import Data.IORef
 import Data.List (intercalate)
 import qualified Data.Map.Strict as M
-import Control.Monad (unless)
-import System.IO (hFlush, hGetContents', stdin, stdout)
+import Control.Monad (unless, when)
+import Control.Applicative (liftA2)
+import System.IO (hFlush, hGetContents', hPutStrLn, stderr, stdin, stdout)
 import Txn
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.UTF8 as BSU
 
 data VMEnv = VMEnv
   { vmBaseDir :: FilePath, -- the script's directory: module resolution root
@@ -167,6 +171,18 @@ callSym env g args
   | Just (_, f) <- M.lookup g (vmHal env) = f args
   | otherwise = vmPanic ("call to unknown symbol: " ++ g)
 
+-- The BStr ref table, process-global.
+--
+-- BStr values are `VData bstrT 0 [VInt key]` at the Sol level -- the same
+-- bridge Handle uses, because an IORef cannot live in a VData field. The
+-- table maps keys to buffers. It is global rather than threaded because
+-- `arith` (where == lands) is reached from the VM loop without the HAL
+-- environment in scope, and the table has exactly one instance per process
+-- anyway.
+{-# NOINLINE globalBst #-}
+globalBst :: BStrTable
+globalBst = unsafePerformIO (newIORef IM.empty)
+
 arith :: ArithOp -> Value -> Value -> IO Value
 arith op (VInt a) (VInt b) = case op of
   OAdd -> pure (VInt (a + b))
@@ -181,8 +197,8 @@ arith op (VInt a) (VInt b) = case op of
   OGe -> pure (vBool (a >= b))
   OEq -> pure (vBool (a == b))
   ONe -> pure (vBool (a /= b))
-arith OEq a b = pure (vBool (veq a b))
-arith ONe a b = pure (vBool (not (veq a b)))
+arith OEq a b = vBool <$> veqIO globalBst a b
+arith ONe a b = fmap (vBool . not) (veqIO globalBst a b)
 -- Numeric contagion: an inexact operand lifts the whole operation. Int/Int
 -- stays quot (above); any VNum in the pair means true real arithmetic.
 arith op (VNum a) (VNum b) = arithN op a b
@@ -443,15 +459,70 @@ withFuelCell env body = alloca $ \p -> do
 -- tids are passed in because the front-end assigns user-type ids in
 -- declaration order (prelude declares them first).
 
-mkHal :: M.Map Name (Int, Int, Int) -> IORef TxState -> IORef Int -> M.Map Name (Int, [Value] -> IO Value)
-mkHal cons tx preempts =
+-- VBStr is an IORef; we can't put it directly in a VData field, so the
+-- runtime uses a table of refs keyed by a fresh Int id -- the same bridge
+-- Handle uses.
+type BStrTable = IORef (IM.IntMap (IORef BStrStore))
+
+newBStrTable :: IO BStrTable
+newBStrTable = newIORef IM.empty
+
+bstInsert :: BStrTable -> IORef BStrStore -> IO Int
+bstInsert tbl ref = atomicModifyIORef' tbl $ \m ->
+  let k = if IM.null m then 1 else fst (IM.findMax m) + 1
+   in (IM.insert k ref m, k)
+
+bstLookup :: BStrTable -> Int -> IO (IORef BStrStore)
+bstLookup tbl k = do
+  m <- readIORef tbl
+  case IM.lookup k m of
+    Just r  -> pure r
+    Nothing -> ioError (userError ("BStr: stale ref " ++ show k ++ " (linearity violation?)"))
+
+bstDelete :: BStrTable -> Int -> IO (IORef BStrStore)
+bstDelete tbl k = do
+  r <- bstLookup tbl k
+  atomicModifyIORef' tbl (\m -> (IM.delete k m, ()))
+  pure r
+
+mkHal :: M.Map Name (Int, Int, Int) -> IORef TxState -> IORef Int -> RtCounts -> M.Map Name (Int, [Value] -> IO Value)
+mkHal cons tx preempts rt =
   M.fromList
     [ ("str", (1, \[v] -> pure (VStr (render v)))),
-      ("strcat", (2, \[VStr a, VStr b] -> pure (VStr (a ++ b)))),
-      ("String.len", (1, \[VStr s] -> pure (VInt (fromIntegral (length s))))),
-      ("strlen", (1, \[VStr s] -> pure (VInt (fromIntegral (length s))))),
+      -- VStr ops: accept VStr; all O(n) due to linked-list backing
+      ("strcat", (2, \[a, b] -> fmap VStr (liftA2 (++) (vsStr a) (vsStr b)))),
+      ("String.len", (1, \[v] -> VInt . fromIntegral . length <$> vsStr v)),
+      ("strlen", (1, \[v] -> VInt . fromIntegral . length <$> vsStr v)),
       ("charAt", (2, charAtH)),
       ("chr", (1, \[VInt c] -> pure (VStr [toEnum (fromIntegral c)]))),
+      -- VBStr ops: O(1) amortised; declared as a separate HAL surface so the
+      -- linearity checker treats them the same as Vec.* (the BStr 1 prelude
+      -- declaration makes BStr linear; every op threads it)
+      -- ---- BStr ops: the fast byte-buffer string tier ----
+      -- At the Sol level, BStr looks like `BStr Int` (the Int is a ref-table
+      -- key). The HAL dispatches via mkBStr/withBStr/consumeBStr.
+      ("BStr.new", (1, \[_] -> newIORef (BStrStore initialBsCap 0 (BS.replicate initialBsCap 0)) >>= mkBStr)),
+      ("BStr.fromStr", (1, \[v] -> vsStr v >>= \s -> do r <- newIORef =<< (let bs = BSU.fromString s; n = BS.length bs; cap = max initialBsCap (n * 2) in pure (BStrStore cap n (bs <> BS.replicate (max 0 (cap - n)) 0))); mkBStr r)),
+      ("BStr.toStr", (1, \[v] -> withBStr v (\r -> VStr <$> bsContent r) >>= \res -> consumeBStr v >> pure res)),
+      ("BStr.append", (2, \[sv, bv] -> withBStr bv (\r -> vsStr sv >>= bsAppendStr r) >> pure bv)),
+      ("BStr.cat", (2, \[a, b] -> do
+          sa <- case a of VStr s -> pure s; _ -> withBStr a bsContent
+          sb <- case b of VStr s -> pure s; _ -> withBStr b bsContent
+          let bs = BSU.fromString (sa ++ sb); n = BS.length bs; cap = max initialBsCap (n * 2)
+          r <- newIORef (BStrStore cap n (bs <> BS.replicate (max 0 (cap - n)) 0))
+          mkBStr r)),
+      ("BStr.len", (1, \[v] -> withBStr v (\r -> do n <- bsCpLen r; pure (VData 4 0 [VInt (fromIntegral n), v])))),
+      ("BStr.at", (2, \[v, VInt i] -> withBStr v (\r -> do c <- bsCpAt r (fromIntegral i - 1); pure (VData 4 0 [VInt (fromIntegral c), v])))),
+      ("BStr.sub", (3, \[v, VInt i, VInt j] -> withBStr v (\r -> do
+          s <- bsContent r
+          let lo = fromIntegral i; hi = fromIntegral j
+          if lo < 1 || hi > length s || lo > hi
+            then vmPanic "BStr.sub: index out of range"
+            else do let bs = BSU.fromString (take (hi - lo + 1) (drop (lo - 1) s)); n = BS.length bs; cap = max initialBsCap (n * 2)
+                    r2 <- newIORef (BStrStore cap n (bs <> BS.replicate (max 0 (cap - n)) 0))
+                    sl <- mkBStr r2
+                    pure (VData 4 0 [sl, v])))),
+      ("BStr.free", (1, \[v] -> consumeBStr v >> pure vUnit)),
       ("error", (1, \[v] -> vmPanic (render v))),
       ("parseInt", (1, parseIntH)),
       -- Numeric prims: the doors into inexact arithmetic. Num.div is TRUE
@@ -478,7 +549,14 @@ mkHal cons tx preempts =
       ("write", (2, \[pv, v] -> writeIoH pv v))
     ]
   where
+    bst = globalBst
     (pathT, handleT) = (tidOf "Path", tidOf "Handle")
+    bstrT = tidOf "BStr"
+    mkBStr r = do k <- bstInsert bst r; pure (VData bstrT 0 [VInt (fromIntegral k)])
+    withBStr (VData t 0 [VInt k]) f | t == bstrT = bstLookup bst (fromIntegral k) >>= f
+    withBStr v _ = vmPanic ("BStr op: not a BStr: " ++ render v)
+    consumeBStr (VData t 0 [VInt k]) | t == bstrT = bstDelete bst (fromIntegral k)
+    consumeBStr v = vmPanic ("BStr.free: not a BStr: " ++ render v)
     tidOf n = maybe (-1) (\(t, _, _) -> t) (M.lookup n cons)
     conTV n = maybe (-1, -1) (\(t, v, _) -> (t, v)) (M.lookup n cons)
     isCon n t g = conTV n == (t, g)
@@ -498,6 +576,22 @@ mkHal cons tx preempts =
       | isCon "Sh" t g = withS q (\c -> do
           (code, out) <- txSh c
           pure (VData 4 0 [VInt (fromIntegral code), VStr out]))
+      -- ---- realtime reads: outside the transaction ----
+      | isCon "Now" t g = withP q (\p -> do
+          noteEscape rt "readNow"
+            ("re-reads " ++ p ++ " from disk; not snapshotted, so this value "
+              ++ "is not validated at commit (transactional: readPath)")
+          VStr . maybe "" id <$> rtRead p)
+      | isCon "NowSh" t g = withS q (\c -> do
+          noteEscape rt "shNow"
+            ("streams `" ++ c ++ "` live and re-runs on every retry "
+              ++ "(transactional: shq, which runs once inside the commit)")
+          VInt . fromIntegral <$> rtShell c)
+    readIoH (VData t g [])
+      | isCon "NowLine" t g = do
+          noteEscape rt "readLineNow"
+            "reads one line of stdin now; re-reads on retry (transactional: input)"
+          VStr <$> rtLine
     readIoH v = vmPanic ("read: cannot decode " ++ render v)
 
     writeIoH pv v = case unPath pv of
@@ -512,9 +606,30 @@ mkHal cons tx preempts =
           | isCon "Dir" t g -> txMkdirp tx p >> pure vUnit
           | isCon "Rm" t g -> txRm tx p >> pure vUnit
           | isCon "RmDir" t g -> txRmdir tx p >> pure vUnit
+        -- ---- realtime writes: land on disk before commit ----
+        VData t g [sv]
+          | isCon "NowSet" t g -> rtOut p sv "writeNow" rtWrite
+          | isCon "NowAdd" t g -> rtOut p sv "appendNow" rtAppend
         bad -> vmPanic ("write " ++ p ++ ": cannot decode " ++ render bad)
       Nothing -> vmPanic ("write: expected a path or string, got " ++ render pv)
 
+
+    -- a realtime write: happens now, survives a rollback, and revokes any
+    -- claim this transaction had on the path (otherwise a script that both
+    -- reads and appendNow's the same file invalidates itself and retries
+    -- until it gives up)
+    rtOut p sv kind op = do
+      let s = case sv of VStr x -> x; other -> render other
+      noteEscape rt kind
+        ("writes " ++ p ++ " immediately; it is on disk before commit and "
+          ++ "stays there if the transaction rolls back (transactional: writePath)")
+      dropped <- op tx p s
+      when dropped $
+        hPutStrLn stderr
+          ("[sol] REALTIME: " ++ p ++ " was already read in this transaction — "
+            ++ "dropping it from the read set; the transaction no longer "
+            ++ "guarantees anything about that path")
+      pure vUnit
 
     toD (VInt i) = fromIntegral i
     toD (VNum d) = d
@@ -550,8 +665,6 @@ mkHal cons tx preempts =
     withS (VStr c) k = k c
     withS bad _ = vmPanic ("expected a command string, got " ++ render bad)
 
-    vBool b = VData 1 (if b then 1 else 0) []
-
     strList = foldr (\x acc -> VData listT 1 [VStr x, acc]) (VData listT 0 [])
     unHandle (VData t 0 [VInt h]) | t == handleT = Just (fromIntegral h)
     unHandle _ = Nothing
@@ -585,10 +698,22 @@ mkHal cons tx preempts =
     parseIntH [v] = vmPanic ("parseInt: not a string: " ++ render v)
     parseIntH _ = vmPanic "parseInt: arity"
 
-    charAtH [VStr s, VInt i]
-      | i >= 1 && fromIntegral i <= length s = pure (VInt (fromIntegral (fromEnum (s !! (fromIntegral i - 1)))))
-      | otherwise = vmPanic "charAt: index out of range"
+    charAtH [sv, VInt i]
+      | isStrVal sv = do
+          s <- vsStr sv
+          let n = fromIntegral i
+          if n >= 1 && n <= length s
+            then pure (VInt (fromIntegral (fromEnum (s !! (n - 1)))))
+            else vmPanic "charAt: index out of range"
     charAtH _ = vmPanic "charAt: bad args"
+
+    bsSubH [VBStr r, VInt i, VInt j] = do
+      s <- bsContent r
+      let lo = fromIntegral i; hi = fromIntegral j
+      if lo < 1 || hi > length s || lo > hi
+        then vmPanic "BStr.sub: index out of range"
+        else bstrFromString (take (hi - lo + 1) (drop (lo - 1) s))
+    bsSubH _ = vmPanic "BStr.sub: bad args"
     indexH [xs, VInt i] = idx xs i
       where
         idx (VVec r) k = getVec r (fromIntegral k - 1) -- O(1); consumes the vector (linearity) — Vec.get keeps it
@@ -597,6 +722,22 @@ mkHal cons tx preempts =
         idx _ _ = vmPanic "!: index out of range"
     indexH _ = vmPanic "!: bad args"
 
+
+-- IO-capable equality: needed for VBStr comparisons.
+veqIO :: BStrTable -> Value -> Value -> IO Bool
+veqIO bst a b = do
+  sa <- strOf a; sb <- strOf b
+  case (sa, sb) of
+    (Just x, Just y) -> pure (x == y)
+    _ -> pure (veq a b)
+  where
+    strOf (VStr s) = pure (Just s)
+    strOf (VData _ 0 [VInt k]) = do
+      m <- readIORef bst
+      case IM.lookup (fromIntegral k) m of
+        Just r -> Just <$> bsContent r
+        Nothing -> pure Nothing
+    strOf _ = pure Nothing
 
 getEnvDebug :: Bool
 getEnvDebug = unsafePerformIO (fmap (== Just "1") (lookupEnv "SOL_JIT_DEBUG"))
