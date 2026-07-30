@@ -41,7 +41,7 @@ import System.Exit (exitFailure)
 import GHC.IO.Encoding (setLocaleEncoding, utf8)
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stdout)
 import Text.Megaparsec (errorBundlePretty, parse)
-import Txn (newTx)
+import Txn (newTx, newRtCounts)
 import VM
 import qualified Val
 
@@ -83,6 +83,7 @@ runSol userSrc = do
                           bprog = compileProg halArities prog
                       tx <- newTx
                       preempts <- newIORef 0
+                      rt <- newRtCounts
                       fuel <- newIORef fuelQuantum
                       let env =
                             VMEnv
@@ -93,7 +94,7 @@ runSol userSrc = do
                                 vmProg = bprog,
                                 vmCore = prog,
                                 vmJit = Nothing,
-                                vmHal = mkHal cons tx preempts,
+                                vmHal = mkHal cons tx preempts rt,
                                 vmFuel = fuel,
                                 vmPreempts = preempts
                               }
