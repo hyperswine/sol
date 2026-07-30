@@ -51,7 +51,37 @@ processes exclude each other with no daemon. Run `examples/counter.sol` twice
 concurrently to watch one commit, the other detect the conflict, retry, and
 land the correct final value.
 
-Known PoC caveat: `print` is not transactional, so a retried script re-prints.
+### Crash atomicity (kill -9 / power loss during commit)
+
+The commit is also atomic against crashes, not just script errors and
+concurrent writers:
+
+- every committed file is written to `<path>.sol-tmp`, fsynced, and
+  **renamed** over the target — a file is entirely-old or entirely-new,
+  never torn;
+- after validation and before any disk mutation, the effect log is
+  serialized to `<script>.soljournal` (fsynced, complete-or-absent). A
+  crash mid-replay leaves the journal as the redo authority: the next run
+  heals first, then executes normally. File effects redo idempotently;
+  each deferred `shq` command that runs is fsync-marked in
+  `<journal>.done` and redo skips marked ones (the marker window makes
+  shell redo **at-least-once** — stated, not hidden);
+- lock dirs carry an owner file (pid + journal path). A contended lock
+  whose owner is dead is **reclaimed**: one reclaimer wins an atomic
+  rename of the lock dir, finishes the dead owner's journal, and removes
+  it. A crashed sol no longer wedges later runs on those paths.
+
+Every crash window is deterministically testable: `SOL_CRASH_AT=n` hard-
+exits (`_exit`, no cleanup) just before applying effect index n —
+`tests/compose/c11_crash_atomic.sh` walks all five windows. `SOL_NOSYNC=1`
+skips the fsyncs when bulk speed matters more than power-loss durability
+(writes stay rename-atomic and the journal still heals a killed process);
+the 200-file benchmark is ~0.13s with it, ~0.54s without.
+
+Known PoC caveats: `print` is not transactional, so a retried script
+re-prints; and a deferred command that FAILS still stops the replay with
+effects after it unapplied (reported, journal cleared — a policy stop,
+not a crash).
 
 ## The auto-provided std surface
 
@@ -383,6 +413,37 @@ assoc-list state threading, and string rendering are exactly what the
 interpreter tier is for, and the whole pipeline is <100ms. The checks
 section is computed, not asserted: one-net-per-strip and jumpers ==
 strips-1 per net are verified from the final state.
+
+## Matrices + CSV (lib/matrix.sol)
+
+`lib/matrix.sol` is the everyday-python tier: a 2D Numeric matrix over the
+linear SoA Vector, with CSV in and out.
+
+    Matrix 1 = Type (Mat Int Int Vector)
+
+The wrapper is linear and the Vector field is DECLARED, so the checker
+tracks the payload: dropping a matrix, using one twice, or leaking the Vec
+out of a destructure is a compile error (two cases in c9 prove it).
+Interrogations thread — `(x, Matrix)` back, same shape as `Vec.len`.
+
+Surface (`mx = use "../lib/matrix". M = mx.M.`): fromRows / fill / dims /
+get / set / row / col / head / selectRows / selectCols / map / fold /
+mapRow / mapCol / mapRows / transpose / mul / mulVec / colMeans /
+fromCsv(Header) / toCsv(Header) / show / free. Elementwise `M.map` and
+`M.fold` are one Vec.map/Vec.fold over the row-major cells column, so
+they hit the typed JIT tier (`examples/csvmatrix.sol` shows the [jit]
+lines on a 50000x3 matrix); indexed work (matmul, selection) threads the
+Vec through get/set the way the Prolog engine threads its heap. Cells are
+Numeric: integer CSVs stay exact, and inexactness enters only through
+`Numeric.div` (colMeans) and propagates. CSV rendering goes through BStr
+— the interpolation fold over a big matrix is exactly the O(n^2) trap
+the byte-buffer tier exists for.
+
+`examples/csvmatrix.sol` is the end-to-end demo: generate two random
+integer CSVs (lib/rand LCG), read them back, head/select/map, gram =
+a·aᵀ, matvec, column means, and write the result CSV — all inside the
+one script transaction, so the outputs exist complete or not at all.
+`tests/compose/c12_matrix.sol` pins every op to hand-computed values.
 
 ## Scientific computing: the Numeric datatype and the typed JIT tier
 

@@ -31,9 +31,12 @@ done
 echo "--- negative tests ---"
 tests/compose/c9_neg_linearity.sh || fail=1
 
+echo "--- crash atomicity ---"
+tests/compose/c11_crash_atomic.sh || fail=1
+
 echo "--- example regression sweep ---"
 echo -n "0" > /tmp/sol-counter.txt
-for f in hello structs modules example fileops vec dtree svm linreg mandel counter jit prolog; do
+for f in hello structs modules example fileops vec dtree svm linreg mandel counter jit prolog csvmatrix bstr realtime bboard physics vecbench; do
   if SOL_JIT=${SOL_JIT:-1} timeout 120 ./sol "examples/$f.sol" > /tmp/ex_out 2>&1; then
     echo "ok   examples/$f.sol"
   else

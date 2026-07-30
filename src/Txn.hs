@@ -28,8 +28,14 @@ import Control.Concurrent (threadDelay)
 import Control.Exception (IOException, try)
 import Control.Monad (foldM, forM_, unless, when)
 import Data.IORef
+import Data.Maybe (mapMaybe)
+import Foreign.C.String (CString, withCString)
+import Foreign.C.Types (CInt (..))
+import System.Environment (lookupEnv)
+import System.IO.Unsafe (unsafePerformIO)
+import Text.Read (readMaybe)
 import qualified Data.IntMap.Strict as IM
-import Data.List (isSuffixOf, sort)
+import Data.List (isInfixOf, isSuffixOf, nub, sort)
 import qualified Data.Map.Strict as M
 import System.Directory
   ( createDirectory,
@@ -41,6 +47,8 @@ import System.Directory
     listDirectory,
     removeDirectory,
     removeFile,
+    removePathForcibly,
+    renamePath,
   )
 import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import System.Exit (ExitCode (..))
@@ -57,7 +65,7 @@ data Effect
   | EMkdir FilePath
   | ERmdir FilePath
   | EShell String
-  deriving (Show)
+  deriving (Show, Read)
 
 data TxState = TxState
   { txReads :: M.Map FilePath (Maybe String), -- content snapshot at first read
@@ -162,7 +170,7 @@ txLs ref dir = do
     Just names -> pure names
     Nothing -> do
       r <- try (listDirectory dir) :: IO (Either IOException [String])
-      let names = sort (filter (not . (".sol-lock" `isSuffixOf`)) (either (const []) id r))
+      let names = sort (filter (not . lockArtifact) (either (const []) id r))
       atomicModifyIORef' ref (\st -> (st {txDirReads = M.insert dir names (txDirReads st)}, ()))
       pure names
   s2 <- readIORef ref
@@ -314,29 +322,195 @@ rtLine = do
   if eof then pure "" else hGetLine stdin
 
 -- ---- commit protocol ------------------------------------------------------
+--
+-- CRASH-ATOMIC edition. The previous protocol was atomic against script
+-- errors and concurrent sol processes, but a crash (kill -9, OOM, power
+-- loss) DURING commit could tear it three ways: a half-written file, a
+-- half-applied effect log, and stranded .sol-lock dirs that hard-fail
+-- every later run. Three mechanisms close those, in order:
+--
+--   1. writeAtomic: every committed file lands under a temp name, is
+--      fsynced, and is renamed over the target. rename(2) is atomic on
+--      POSIX, so an individual file is always entirely-old or
+--      entirely-new — never torn.
+--   2. the REDO JOURNAL: after validation and before any disk mutation,
+--      the whole effect log is serialized to <script>.soljournal and
+--      fsynced (itself via writeAtomic, so the journal is complete or
+--      absent). A crash mid-replay leaves the journal as the authority:
+--      the next run (of this script, or any sol that reclaims one of the
+--      dead process's locks) REDOES it. File effects are idempotent
+--      (absolute content, rename-applied), so redo is safe to repeat.
+--      Deferred shell commands are not idempotent; each one that runs is
+--      marked in <journal>.done (append + fsync) and redo skips marked
+--      ones. The crash window between a command finishing and its marker
+--      landing means shell redo is AT-LEAST-ONCE — stated here rather
+--      than hidden, and narrower than the every-crash re-run it replaces.
+--   3. PID-stamped locks: a lock dir carries an owner file (pid +
+--      journal path). acquire probes a contended lock's owner with
+--      kill(pid, 0); a dead owner's lock is reclaimed by atomically
+--      RENAMING the lock dir (one reclaimer wins the rename, losers keep
+--      spinning), finishing the dead owner's journal first if one exists.
+--      No daemon, no manual cleanup, and a crashed sol no longer wedges
+--      every future run on those paths.
+--
+-- Honest limits, so nobody reads more than is there: fsync is
+-- best-effort (some filesystems lie; we do not detect that); concurrent
+-- reclaimers can both redo the same journal (file effects idempotent,
+-- shell effects at-least-once as above); and a redo that races a live
+-- writer on an UNLOCKED path is possible only if that writer ignores
+-- locks — sol processes never do.
+
+foreign import ccall unsafe "sol_fsync_path" c_fsyncPath :: CString -> IO CInt
+foreign import ccall unsafe "sol_pid_alive" c_pidAlive :: CInt -> IO CInt
+foreign import ccall unsafe "sol_getpid" c_getpid :: IO CInt
+foreign import ccall unsafe "sol_hard_exit" c_hardExit :: CInt -> IO ()
+
+-- SOL_NOSYNC=1 skips every fsync: writes stay rename-atomic (no torn
+-- files, and the journal still heals a killed process), but a POWER LOSS
+-- can lose "committed" data. For bulk jobs on a filesystem you trust,
+-- the fsync tax (~2 syncs per committed file) is the dominant cost.
+{-# NOINLINE noSync #-}
+noSync :: Bool
+noSync = unsafePerformIO (maybe False (/= "0") <$> lookupEnv "SOL_NOSYNC")
+
+fsyncPath :: FilePath -> IO ()
+fsyncPath p = unless noSync (withCString p (fmap (const ()) . c_fsyncPath))
+
+parentOf :: FilePath -> FilePath
+parentOf p = case reverse (dropWhile (/= '/') (reverse p)) of
+  "" -> "."
+  q -> q
+
+-- entirely-old or entirely-new, never torn; durable once we return
+writeAtomic :: FilePath -> String -> IO ()
+writeAtomic p v = do
+  let tmp = p ++ ".sol-tmp"
+  writeFile tmp v
+  fsyncPath tmp
+  renamePath tmp p
+  fsyncPath (parentOf p)
+
+-- ---- locks ----------------------------------------------------------------
 
 lockPath :: FilePath -> FilePath
 lockPath p = p ++ ".sol-lock"
 
-acquire :: FilePath -> IO ()
-acquire p = go (0 :: Int)
+ownerPath :: FilePath -> FilePath
+ownerPath p = lockPath p ++ "/owner"
+
+-- jpath: this process's journal path, recorded in the owner file so a
+-- reclaimer can finish our commit if we die holding the lock.
+acquire :: FilePath -> FilePath -> IO ()
+acquire = acquireGo True
+
+-- the recovery path uses acquireGo False: it must not recurse into
+-- journal recovery while already performing it
+acquireGo :: Bool -> FilePath -> FilePath -> IO ()
+acquireGo recover jpath p = go (0 :: Int)
   where
-    parent = reverse (dropWhile (/= '/') (reverse p))
+    parent = parentOf p
     go n = do
       -- the lock lives beside the target; its parent dir may itself be a
       -- pending mkdir in this very txn, so ensure it exists before locking
-      unless (null parent) (createDirectoryIfMissing True parent)
+      unless (parent == ".") (createDirectoryIfMissing True parent)
       r <- try (createDirectory (lockPath p)) :: IO (Either IOException ())
       case r of
-        Right () -> pure ()
+        Right () -> do
+          me <- c_getpid
+          writeFile (ownerPath p) (show (fromIntegral me :: Int) ++ "\n" ++ jpath ++ "\n")
         Left _
-          | n > 5000 -> ioError (userError ("sol: could not lock " ++ p ++ " (stale " ++ lockPath p ++ "?)"))
-          | otherwise -> threadDelay 1000 >> go (n + 1)
+          | n > 5000 -> ioError (userError ("sol: could not lock " ++ p ++ " (live " ++ lockPath p ++ ")"))
+          | otherwise -> do
+              when (n `mod` 250 == 249) (tryReclaim recover p)
+              threadDelay 1000 >> go (n + 1)
+
+-- a contended lock whose recorded owner is dead is stale. Exactly one
+-- reclaimer wins the atomic rename of the lock dir; it finishes the dead
+-- owner's journal (if any) and removes the claimed dir. Losers, and any
+-- lock with a live/unreadable owner, keep waiting.
+tryReclaim :: Bool -> FilePath -> IO ()
+tryReclaim recover p = do
+  own <- try (readFile' (ownerPath p)) :: IO (Either IOException String)
+  case own of
+    Left _ -> pure () -- no owner file (mid-create, or pre-upgrade lock): wait
+    Right txt -> case lines txt of
+      (pidL : jL : _) | Just pid <- readMaybe pidL -> do
+        alive <- c_pidAlive (fromIntegral (pid :: Int))
+        when (alive == 0) $ do
+          me <- c_getpid
+          let claim = lockPath p ++ ".reclaim." ++ show (fromIntegral me :: Int)
+          won <- try (renamePath (lockPath p) claim) :: IO (Either IOException ())
+          case won of
+            Left _ -> pure () -- someone else got it
+            Right () -> do
+              hPutStrLn stderr ("[sol] reclaimed stale lock on " ++ p ++ " (owner pid " ++ show pid ++ " is dead)")
+              when recover (recoverJournal False jL)
+              removePathForcibly claim
+      _ -> pure ()
 
 release :: FilePath -> IO ()
 release p = do
-  _ <- try (removeDirectory (lockPath p)) :: IO (Either IOException ())
+  _ <- try (removePathForcibly (lockPath p)) :: IO (Either IOException ())
   pure ()
+
+-- ---- the redo journal -----------------------------------------------------
+
+donePath :: FilePath -> FilePath
+donePath j = j ++ ".done"
+
+-- complete-or-absent by construction: writeAtomic, plus a trailing COMMIT
+-- line so a torn pre-rename tmp can never be mistaken for a journal
+writeJournal :: FilePath -> [Effect] -> IO ()
+writeJournal j effs = writeAtomic j (unlines ["SOLJ1", show effs, "COMMIT"])
+
+parseJournal :: String -> Maybe [Effect]
+parseJournal txt = case lines txt of
+  ("SOLJ1" : effsL : "COMMIT" : _) -> case reads effsL of
+    [(es, rest)] | all (`elem` " \t") rest -> Just es
+    _ -> Nothing
+  _ -> Nothing
+
+readDone :: FilePath -> IO [Int]
+readDone j = do
+  r <- try (readFile' (donePath j)) :: IO (Either IOException String)
+  pure (either (const []) (mapMaybe readMaybe . lines) r)
+
+markDone :: FilePath -> Int -> IO ()
+markDone j i = do
+  appendFile (donePath j) (show i ++ "\n")
+  fsyncPath (donePath j)
+
+clearJournal :: FilePath -> IO ()
+clearJournal j = do
+  removePathForcibly j
+  removePathForcibly (donePath j)
+  fsyncPath (parentOf j)
+
+-- redo an interrupted commit. takeLocks=True is the startup path (locks
+-- must be taken around the redo); False is the reclaim path (the dead
+-- owner's remaining lock dirs still fence other sol processes off the
+-- touched paths, and we are already inside lock acquisition).
+recoverJournal :: Bool -> FilePath -> IO ()
+recoverJournal takeLocks j = do
+  ex <- doesFileExist j
+  when ex $ do
+    txt <- readFile' j
+    case parseJournal txt of
+      Nothing -> do
+        hPutStrLn stderr ("[sol] discarding incomplete journal " ++ j ++ " (crash before the commit point; the transaction never took effect)")
+        clearJournal j
+      Just effs -> do
+        let touched = sort (nub [p | e <- effs, Just p <- [effectPath e]])
+        when takeLocks (forM_ touched (acquireGo False j))
+        stillThere <- doesFileExist j -- a concurrent reclaimer may have finished it
+        when stillThere $ do
+          done <- readDone j
+          hPutStrLn stderr ("[sol] recovering interrupted commit from " ++ j ++ " (" ++ show (length effs) ++ " effect(s), " ++ show (length done) ++ " shell(s) already done)")
+          _ <- replayEffs j True done Nothing (zip [0 ..] effs)
+          clearJournal j
+        when takeLocks (forM_ (reverse touched) release)
+
+-- ---- commit ---------------------------------------------------------------
 
 data CommitResult = Committed Int | Conflict [FilePath]
 
@@ -347,13 +521,14 @@ effectPath (EMkdir p) = Just p
 effectPath (ERmdir p) = Just p
 effectPath (EShell _) = Nothing
 
--- lock (sorted) -> validate reads AND dir listings -> replay the effect
--- log in order -> unlock. Deferred shell commands run inside the commit,
--- after validation: if the txn retried they never happened. Once released
--- they CANNOT be rolled back — a failing deferred command stops the replay
--- and reports what did not run.
-commit :: IORef TxState -> IO CommitResult
-commit ref = do
+-- lock (sorted) -> validate reads AND dir listings -> journal the effect
+-- log (fsynced; the commit point) -> replay it in order -> clear the
+-- journal -> unlock. Deferred shell commands run inside the commit, after
+-- validation: if the txn retried they never happened. Once released they
+-- CANNOT be rolled back — a failing deferred command stops the replay and
+-- reports what did not run.
+commit :: IORef TxState -> FilePath -> IO CommitResult
+commit ref jpath = do
   s <- readIORef ref
   let effs = reverse (txEffects s)
       touched =
@@ -364,7 +539,7 @@ commit ref = do
                 M.fromList [(p, ()) | e <- effs, Just p <- [effectPath e]]
               ]
           )
-  forM_ touched acquire -- sorted: global lock order
+  forM_ touched (acquire jpath) -- sorted: global lock order
   staleC <-
     foldM
       ( \acc (p, snap) -> do
@@ -377,7 +552,7 @@ commit ref = do
     foldM
       ( \acc (dir, names) -> do
           r <- try (listDirectory dir) :: IO (Either IOException [String])
-          let now = sort (filter (not . (".sol-lock" `isSuffixOf`)) (either (const []) id r))
+          let now = sort (filter (not . lockArtifact) (either (const []) id r))
           pure (if now == names then acc else dir : acc)
       )
       []
@@ -385,27 +560,61 @@ commit ref = do
   let stale = staleC ++ staleD
   res <-
     if null stale
-      then Committed <$> replay effs 0
+      then do
+        crashAt <- (>>= readMaybe) <$> lookupEnv "SOL_CRASH_AT"
+        when (not (null effs)) (writeJournal jpath effs)
+        n <- replayEffs jpath False [] crashAt (zip [0 ..] effs)
+        clearJournal jpath
+        pure (Committed n)
       else pure (Conflict stale)
   forM_ (reverse touched) release
   pure res
+
+-- .sol-lock dirs, reclaim renames, and .sol-tmp staging files are
+-- commit-protocol artifacts: invisible to validation and to txLs
+lockArtifact :: FilePath -> Bool
+lockArtifact n =
+  ".sol-lock" `isSuffixOf` n
+    || ".sol-tmp" `isSuffixOf` n
+    || ".sol-lock.reclaim." `isInfixOf` n
+
+-- replay the (indexed) effect log. recovery=True is the redo path: file
+-- effects re-apply idempotently, shell effects in `done` are skipped and
+-- the rest re-run (loudly — this is the at-least-once window). crashAt
+-- is the SOL_CRASH_AT hook: die like kill -9 just before applying that
+-- effect index, so the crash windows are deterministically testable.
+replayEffs :: FilePath -> Bool -> [Int] -> Maybe Int -> [(Int, Effect)] -> IO Int
+replayEffs _ _ _ _ [] = pure 0
+replayEffs j recovery done crashAt ((i, e) : rest) = do
+  case crashAt of
+    Just k | k == i -> do
+      hPutStrLn stderr ("[sol] SOL_CRASH_AT=" ++ show k ++ ": hard exit before effect " ++ show k)
+      hFlush stderr
+      c_hardExit 137
+    _ -> pure ()
+  case e of
+    EWrite p v -> writeAtomic p v >> rec'
+    ERemove p -> do
+      _ <- try (removeFile p) :: IO (Either IOException ())
+      rec'
+    EMkdir p -> createDirectoryIfMissing True p >> rec'
+    ERmdir p -> do
+      _ <- try (removeDirectory p) :: IO (Either IOException ())
+      rec'
+    EShell cmd
+      | recovery && i `elem` done -> do
+          hPutStrLn stderr ("[sol] redo: skipping already-run command: " ++ cmd)
+          rec'
+      | otherwise -> do
+          when recovery $ hPutStrLn stderr ("[sol] redo: re-running deferred command (at-least-once): " ++ cmd)
+          (code, out) <- txSh cmd
+          markDone j i
+          unless (null out) (putStr ("[sol] $ " ++ cmd ++ "\n" ++ out))
+          if code == 0
+            then rec'
+            else do
+              putStrLn ("[sol] deferred command FAILED (exit " ++ show code ++ "): " ++ cmd)
+              putStrLn ("[sol] " ++ show (length rest) ++ " queued effect(s) after it did NOT run")
+              pure 1
   where
-    replay [] n = pure n
-    replay (e : rest) n = case e of
-      EWrite p v -> writeFile p v >> replay rest (n + 1)
-      ERemove p -> do
-        _ <- try (removeFile p) :: IO (Either IOException ())
-        replay rest (n + 1)
-      EMkdir p -> createDirectoryIfMissing True p >> replay rest (n + 1)
-      ERmdir p -> do
-        _ <- try (removeDirectory p) :: IO (Either IOException ())
-        replay rest (n + 1)
-      EShell cmd -> do
-        (code, out) <- txSh cmd
-        unless (null out) (putStr ("[sol] $ " ++ cmd ++ "\n" ++ out))
-        if code == 0
-          then replay rest (n + 1)
-          else do
-            putStrLn ("[sol] deferred command FAILED (exit " ++ show code ++ "): " ++ cmd)
-            putStrLn ("[sol] " ++ show (length rest) ++ " queued effect(s) after it did NOT run")
-            pure (n + 1)
+    rec' = (1 +) <$> replayEffs j recovery done crashAt rest

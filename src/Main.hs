@@ -163,13 +163,16 @@ main = do
   let shapeNames = M.fromList [(tid, fields) | (fields, tid) <- M.toList shapes]
       consTV = M.map (\(t, v, _) -> (t, v)) cons
       dataFile = dropExtension path ++ ".soldata"
+      journalFile = dropExtension path ++ ".soljournal"
   rt <- newRtCounts
-  unless dumpAsm $ runTxLoop (takeDirectory path) dataFile consTV shapeNames bprog prog jc cons runList rt 0
+  -- heal first: a previous run of this script may have crashed mid-commit
+  unless dumpAsm $ recoverJournal True journalFile
+  unless dumpAsm $ runTxLoop (takeDirectory path) dataFile journalFile consTV shapeNames bprog prog jc cons runList rt 0
 
 -- run every `>` statement in order inside one transaction, then commit;
 -- on read-set conflict, reset and re-run the whole script
-runTxLoop :: FilePath -> FilePath -> M.Map Name (Int, Int) -> M.Map Int [Name] -> BProg -> Prog -> Maybe JitCtx -> M.Map Name (Int, Int, Int) -> [Name] -> RtCounts -> Int -> IO ()
-runTxLoop base dataFile consTV shapeNames bprog core jc cons topNames rt attempt = do
+runTxLoop :: FilePath -> FilePath -> FilePath -> M.Map Name (Int, Int) -> M.Map Int [Name] -> BProg -> Prog -> Maybe JitCtx -> M.Map Name (Int, Int, Int) -> [Name] -> RtCounts -> Int -> IO ()
+runTxLoop base dataFile journalFile consTV shapeNames bprog core jc cons topNames rt attempt = do
   tx <- newTx
   fuel <- newIORef fuelQuantum
   preempts <- newIORef 0
@@ -182,7 +185,7 @@ runTxLoop base dataFile consTV shapeNames bprog core jc cons topNames rt attempt
   res <-
     if attempt < force
       then pure (Conflict ["<forced>"]) -- discard this attempt's effects
-      else commit tx
+      else commit tx journalFile
   case res of
     Committed n -> do
       when (n > 0) $ putStrLn ("[sol] committed " ++ show n ++ " file(s) atomically")
@@ -199,7 +202,7 @@ runTxLoop base dataFile consTV shapeNames bprog core jc cons topNames rt attempt
           exitFailure
       | otherwise -> do
           putStrLn ("[sol] conflict on " ++ show stale ++ " — retrying (attempt " ++ show (attempt + 2) ++ ")")
-          runTxLoop base dataFile consTV shapeNames bprog core jc cons topNames rt (attempt + 1)
+          runTxLoop base dataFile journalFile consTV shapeNames bprog core jc cons topNames rt (attempt + 1)
 
 numberEvals :: [STop] -> ([STop], [Name])
 numberEvals tops = (map fst numbered, [n | (_, Just n) <- numbered])

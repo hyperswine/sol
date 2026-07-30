@@ -31,6 +31,16 @@ lenFree v = (n, v2) = Vec.len v; u = Vec.free v2; n.
 f v = case 1 == 1 of True -> lenFree v | False -> 0.
 > print (f (Vec.fromList [1])).
 '
+t "matrix leak through constructor" "LINEARITY" '
+Matrix 1 = Type (Mat Int Int Vector).
+f m = Mat r c v = m; r.
+> print (f (Mat 1 1 (Vec.fromList [1]))).
+'
+t "matrix payload double-use" "LINEARITY" '
+Matrix 1 = Type (Mat Int Int Vector).
+f m = Mat r c v = m; (a, v2) = Vec.len v; (b, v3) = Vec.len v; a + b.
+> print (f (Mat 1 1 (Vec.fromList [1]))).
+'
 t "handle leak (examples/bad_leak)" "LINEARITY" "$(cat examples/bad_leak.sol)"
 t "handle double-use (examples/bad_double)" "LINEARITY" "$(cat examples/bad_double.sol)"
 exit $fail
