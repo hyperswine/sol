@@ -14,7 +14,7 @@ mkRow s =
   cx = case cls == 0 of True -> 0 - 1 | False -> 1;
   cy = case cls == 0 of True -> 0 - 1 | False -> 1;
   {x1 = cx + Rand.gauss4 s1 / 2, x2 = cy + Rand.gauss4 s2 / 2,
-   y = case cls == 0 of True -> 0 - 1 | False -> 1}.
+    y = case cls == 0 of True -> 0 - 1 | False -> 1}.
 
 fill v s k | k == 0 = v.
 fill v s k = fill (Vec.push (mkRow (Rand.next (s + k * 100003))) v) s (k - 1).
