@@ -39,3 +39,11 @@ rnd = use "rnd ... ".
 Rand = rnd.Rand.
 
 Then use Rand.x everywhere
+
+-----
+
+.soljournal are the things allowing atomicity on crash
+
+<path>.sol-tmp are the files that are mirrored in transactions >
+
+Noticing quite a lot of slowdowns on build.sol. Uses 2 real time functions as well as transactions. Other things arent as slow though so not sure.
